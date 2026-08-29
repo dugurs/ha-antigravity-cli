@@ -1,0 +1,80 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Antigravity CLI",
+        "description": "Enter the connection details for your Antigravity CLI agent service.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "api_key": "API Key (Optional)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to Antigravity CLI",
+      "invalid_auth": "Invalid authentication",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "Device is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Antigravity CLI Options",
+        "data": {
+          "processing_mode": "Processing Mode",
+          "port": "Port",
+          "poll_interval": "Data polling interval (seconds)",
+          "api_key": "API Key (Optional)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "Status"
+      },
+      "active_sessions": {
+        "name": "Active Sessions"
+      },
+      "uptime": {
+        "name": "Uptime"
+      },
+      "memory_usage": {
+        "name": "Memory Usage"
+      },
+      "cpu_usage": {
+        "name": "CPU Usage"
+      }
+    },
+    "button": {
+      "sync_status": {
+        "name": "Sync Status"
+      },
+      "restart_agent": {
+        "name": "Restart Agent"
+      }
+    },
+    "conversation": {
+      "assistant": {
+        "name": "Assistant"
+      }
+    }
+  },
+  "services": {
+    "run_command": {
+      "name": "Run Command",
+      "description": "Executes a command via the Antigravity CLI agent.",
+      "fields": {
+        "command": {
+          "name": "Command",
+          "description": "The command string to execute."
+        }
+      }
+    }
+  }
+}

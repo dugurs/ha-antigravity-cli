@@ -1,0 +1,80 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Antigravity CLI 연결",
+        "description": "Antigravity CLI 에이전트 서비스의 연결 정보를 입력하세요.",
+        "data": {
+          "host": "호스트 (Host)",
+          "port": "포트 (Port)",
+          "api_key": "API 키 (선택사항)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Antigravity CLI 서비스에 연결하지 못했습니다.",
+      "invalid_auth": "인증 정보가 올바르지 않습니다.",
+      "unknown": "예상치 못한 오류가 발생했습니다."
+    },
+    "abort": {
+      "already_configured": "이미 구성된 기기입니다."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Antigravity CLI 옵션 설정",
+        "data": {
+          "processing_mode": "대화 처리 동작 모드",
+          "port": "포트 (Port)",
+          "poll_interval": "데이터 폴링 주기(초)",
+          "api_key": "API 키 (선택사항)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "상태"
+      },
+      "active_sessions": {
+        "name": "활성 세션 수"
+      },
+      "uptime": {
+        "name": "가동 시간"
+      },
+      "memory_usage": {
+        "name": "메모리 사용량"
+      },
+      "cpu_usage": {
+        "name": "CPU 사용률"
+      }
+    },
+    "button": {
+      "sync_status": {
+        "name": "상태 동기화"
+      },
+      "restart_agent": {
+        "name": "에이전트 재시작"
+      }
+    },
+    "conversation": {
+      "assistant": {
+        "name": "어시스턴트"
+      }
+    }
+  },
+  "services": {
+    "run_command": {
+      "name": "명령어 실행",
+      "description": "Antigravity CLI 에이전트를 통해 명령어를 실행합니다.",
+      "fields": {
+        "command": {
+          "name": "명령어",
+          "description": "실행할 명령어 문자열입니다."
+        }
+      }
+    }
+  }
+}
