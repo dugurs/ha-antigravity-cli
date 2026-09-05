@@ -30,9 +30,6 @@ from .const import (
     CONF_PROCESSING_MODE,
     DEFAULT_PROCESSING_MODE,
     DOMAIN,
-    MODE_FAST_LOCAL,
-    MODE_HYBRID,
-    MODE_LLM_MCP,
     NAME,
 )
 from .coordinator import AntigravityDataUpdateCoordinator
@@ -44,6 +41,45 @@ _LOGGER = logging.getLogger(__name__)
 LLM_PREFIXES = [
     "/llm", "!llm", "/ai", "/agy", "ai ", "agy ", "질문:", "질문 ", "물어봐 "
 ]
+
+ROOMS = ["거실", "안방", "작은방", "옷방", "주방", "화장실", "세탁실", "현관", "베란다"]
+
+# Each device-type category names 1+ candidate HA domains, checked in no
+# particular priority order -- which domain a given appliance actually lives
+# under varies by house (a boiler might be a switch relay or a real climate
+# entity; a bathroom fan might be fan/climate/switch), so resolution below
+# scores every domain in the tuple instead of assuming just one.
+DEVICE_CATEGORIES: dict[str, dict[str, Any]] = {
+    "light": {"suffixes": ["전등", "조명", "램프", "불빛", "등", "불", "light"], "domains": ("light",)},
+    "fan": {"suffixes": ["선풍기", "환풍기", "서큘레이터", "써큘레이터", "실링팬", "환기", "팬", "fan"], "domains": ("fan", "climate", "switch")},
+    "cover": {"suffixes": ["블라인더", "블라인드", "커텐", "커탠", "커튼", "암막", "창문", "셔터", "도어", "cover", "blind", "curtain"], "domains": ("cover",)},
+    "climate": {"suffixes": ["에어컨", "에어콘", "냉방", "난방", "ac", "climate"], "domains": ("climate", "switch")},
+    "humidifier": {"suffixes": ["가습기", "제습기"], "domains": ("humidifier", "switch")},
+    # Turning one of these OFF always goes through the confirmation gate
+    # below (see _execute_domain_control) -- boiler/heater/outlet mishaps
+    # have real consequences, unlike a light or fan.
+    "appliance": {"suffixes": ["보일러", "히터", "온열기", "전기스토브", "콘센트", "플러그"], "domains": ("switch", "climate")},
+    "switch": {"suffixes": ["스위치", "switch"], "domains": ("switch",)},
+    "media_player": {"suffixes": ["미디어플레이어", "티비", "tv", "스피커", "오디오", "음악", "speaker"], "domains": ("media_player",)},
+}
+
+_WHOLE_HOUSE_WORDS = ("전체", "다", "모두", "모든")
+
+# Only these domains are ever real control targets -- excludes a device's own
+# diagnostic/helper entities (update/button/number/select/sensor), which
+# routinely share the exact same friendly_name as the actual controllable
+# entity (e.g. update.dress_plug and switch.dress_plug both "옷방 플러그").
+_CONTROLLABLE_DOMAINS = ("light", "switch", "cover", "fan", "climate", "media_player", "humidifier", "automation", "scene", "script")
+
+_AFFIRMATIVE_WORDS = ("응", "네", "예", "그래", "오케이", "ok", "yes")
+_NEGATIVE_WORDS = ("아니", "아니오", "아니요", "no", "취소")
+
+_TEMPERATURE_RE = re.compile(r"(\d{1,2})\s*도")
+_PERCENT_RE = re.compile(r"(\d{1,3})\s*(?:퍼센트|%)")
+
+# Compound commands share one action across 2+ device types in one sentence
+# ("안방 등하고 선풍기 켜줘") -- split on the first connector found.
+_COMPOUND_CONNECTORS = ["하고", "이랑", "랑", "그리고", ","]
 
 # Action keywords
 ACTIONS = {
@@ -76,15 +112,6 @@ ACTIONS = {
     "media_pause": [
         "일시정지해줘", "일시정지", "pause",
     ],
-}
-
-DOMAIN_SUFFIXES = {
-    "fan": ["선풍기", "환풍기", "서큘레이터", "써큘레이터", "실링팬", "환기", "팬", "fan"],
-    "light": ["전등", "조명", "램프", "불빛", "등", "불", "light"],
-    "cover": ["블라인더", "블라인드", "커텐", "커탠", "커튼", "암막", "창문", "셔터", "도어", "cover", "blind", "curtain"],
-    "switch": ["스위치", "콘센트", "플러그", "switch", "plug"],
-    "climate": ["에어컨", "에어콘", "냉방", "보일러", "난방", "히터", "ac", "climate"],
-    "media_player": ["미디어플레이어", "티비", "tv", "스피커", "오디오", "음악", "speaker"],
 }
 
 VOWEL_MAPPINGS = {
@@ -130,12 +157,18 @@ WEATHER_TRANSLATIONS = {
 
 @dataclass
 class ConversationSession:
-    """Dataclass holding contextual memory of a conversation session."""
+    """Local-fallback-only contextual memory.
+
+    The addon's own conversation_id-based session (session_manager.py) is
+    authoritative whenever the addon is reachable -- this exists purely so
+    the local fallback path (see async_process()) has continuity across
+    turns during an addon outage: a bare follow-up ("그거 꺼"), a pending
+    dangerous-appliance confirmation, or a remembered room for "습도는?".
+    """
     topic: str | None = None
     last_entity_id: str | None = None
-    last_entity_name: str | None = None
-    last_domain: str | None = None
     last_room: str | None = None
+    pending_confirm: dict | None = None
     updated_at: float = 0.0
 
 
@@ -148,52 +181,73 @@ def normalize_phonetics(text: str) -> str:
 
 
 def collapse_domain_suffixes(text: str) -> tuple[str, str | None]:
-    """Greedily collapses sequences of domain suffixes at the end of the text while preserving subtypes."""
+    """Greedily collapses sequences of device-category suffixes at the end
+    of the text while preserving subtypes; returns (remaining_text, category)."""
     clean = normalize_phonetics(text.strip().replace(" ", "").lower())
     clean = re.sub(r"[을를이가은는에게로에\s]+$", "", clean).strip()
 
-    detected_domain = None
+    detected_category = None
     changed = True
 
     while changed and clean:
         changed = False
-        for domain, suffixes in DOMAIN_SUFFIXES.items():
-            for suffix in suffixes:
+        for category, spec in DEVICE_CATEGORIES.items():
+            for suffix in spec["suffixes"]:
                 suff_norm = normalize_phonetics(suffix)
                 if clean.endswith(suff_norm) and len(clean) > len(suff_norm):
                     clean = clean[: -len(suff_norm)].strip()
-                    detected_domain = domain
+                    detected_category = category
                     changed = True
                     break
             if changed:
                 break
 
     if "스탠드" in clean or "화장대" in clean or "다운라이트" in clean:
-        if not detected_domain:
-            detected_domain = "light"
+        if not detected_category:
+            detected_category = "light"
 
-    return clean or normalize_phonetics(text.strip().replace(" ", "").lower()), detected_domain
+    return clean or normalize_phonetics(text.strip().replace(" ", "").lower()), detected_category
+
+
+def _strip_setting_words(text: str) -> str:
+    """Remove trailing "맞춰줘"/"설정"/particle fragments left after pulling
+    a number (temperature or percentage) out of a control phrase."""
+    for w in ["으로맞춰줘", "으로맞춰", "으로설정해줘", "으로설정", "으로해줘", "맞춰줘", "맞춰", "설정해줘", "설정", "해줘", "으로", "로"]:
+        text = text.replace(w, "")
+    return text
+
+
+def _split_compound_target(raw_target: str) -> list[str]:
+    """Split a compound target phrase on the first connector found
+    ("안방 등하고 선풍기" -> ["안방 등", "선풍기"]), propagating a leading
+    room name from the first clause to the second if the second doesn't
+    name its own room -- compound commands usually share one room, stated
+    only once. Falls back to a single-item list when no connector is found.
+    """
+    for conn in _COMPOUND_CONNECTORS:
+        idx = raw_target.find(conn)
+        if idx > 0:
+            left = raw_target[:idx].strip()
+            right = raw_target[idx + len(conn):].strip()
+            if left and right:
+                left_flat = left.replace(" ", "")
+                right_flat = right.replace(" ", "")
+                shared_room = next((r for r in ROOMS if left_flat.startswith(r)), None)
+                if shared_room and not any(right_flat.startswith(r) for r in ROOMS):
+                    right = f"{shared_room} {right}"
+                return [left, right]
+    return [raw_target]
 
 
 # A relative-delay expression ("5초 후에", "10분 뒤", "1시간 있다가") means the
-# addon's scheduler (core/ha_client.py's _schedule_delayed_control) needs to
-# handle this command, not the instant local turn_on/turn_off match below --
-# parse_control_intent() only looks at the trailing action keyword, so
-# without this guard "안방 등 5초 후에 꺼줘" matched "꺼줘", executed
-# turn_off immediately, and the delay wording was silently dropped as part
-# of the (unused) target string.
+# addon's scheduler needs to handle this command, not an instant local
+# turn_on/turn_off match -- without this guard "안방 등 5초 후에 꺼줘" matched
+# "꺼줘" and executed turn_off immediately, silently dropping the delay.
 _DELAY_PHRASE_RE = re.compile(r"\d+\s*(?:초|분|시간)\s*(?:뒤|후|있다가|있으면|있다)")
 
 # "예약 실행 목록 보여줘" (list pending scheduled commands) is a QUESTION, but
-# parse_control_intent()'s keyword check isn't anchored to the end of the
-# sentence (`f" {kw}" in clean` matches anywhere) -- confirmed live: this
-# text matched the "실행" keyword mid-sentence, treated "예약" as the target,
-# and fuzzy-matched it against sensor.backup_next_scheduled_automatic_backup
-# (friendly name contains "예약"), replying with a false "실행했습니다" as if
-# a backup had just been triggered (it hadn't -- turn_on against a read-only
-# sensor is a no-op HA service call, but the reply claimed success anyway).
-# Mirrors core/ha_client.py's is_scheduled_controls_query() in the addon so
-# this question reaches that real handler instead.
+# the keyword check below isn't anchored to the end of the sentence, so this
+# guard keeps such questions from being treated as a control command.
 _SCHEDULE_QUERY_WORDS = ("목록", "리스트", "몇개", "몇 개", "개수", "뭐있", "뭐 있", "보여줘", "알려줘", "확인")
 
 
@@ -206,22 +260,57 @@ def _is_schedule_query(text: str) -> bool:
     return text.rstrip().endswith("?")
 
 
+def _is_entity_on(state) -> bool:
+    """State-aware "is this currently on" check used by toggle -- a cover's
+    `state` is open/closed, a climate/media_player's is its own mode string
+    (hvac mode, playing/idle/...), never literally "on"."""
+    if state.domain == "cover":
+        return state.state == "open"
+    if state.domain in ("media_player", "climate"):
+        return state.state not in ("off", "unavailable", "unknown")
+    return state.state == "on"
+
+
+def _service_for_action(domain: str, action: str) -> tuple[str | None, str | None, str | None]:
+    """Map (domain, action) to (service_domain, service, speech_verb)."""
+    if action == "turn_on":
+        if domain == "cover":
+            return "cover", "open_cover", "열었습니다"
+        if domain in ("scene", "script", "light", "switch", "fan", "climate", "media_player", "automation", "humidifier"):
+            verb = "켰습니다" if domain in ("light", "switch", "fan", "climate", "media_player", "humidifier") else "실행했습니다"
+            return domain, "turn_on", verb
+        return "homeassistant", "turn_on", "켰습니다"
+    if action == "turn_off":
+        if domain == "cover":
+            return "cover", "close_cover", "닫았습니다"
+        if domain in ("light", "switch", "fan", "climate", "media_player", "automation", "humidifier"):
+            return domain, "turn_off", "껐습니다"
+        return "homeassistant", "turn_off", "껐습니다"
+    if action == "open_cover":
+        return "cover", "open_cover", "열었습니다"
+    if action == "close_cover":
+        return "cover", "close_cover", "닫았습니다"
+    if action == "stop_cover":
+        return "cover", "stop_cover", "멈췄습니다"
+    if action == "media_play":
+        return "media_player", "media_play", "재생합니다"
+    if action == "media_pause":
+        return "media_player", "media_pause", "일시정지했습니다"
+    return None, None, None
+
+
 def _parse_sse_chat_response(raw_text: str) -> tuple[str | None, str | None]:
     """Extract (final speech text, conversation id) from the addon's
     /api/chat body.
 
-    That endpoint always streams Server-Sent Events (see
-    core/streamer.py's make_sse()/stream_fast_dashboard()), never a plain
-    JSON object -- a bare `await response.json()` against it raises
-    aiohttp.ContentTypeError every time, which used to mean every command
-    that fell through past the local fast-match below silently landed on
-    the "addon offline" local-summary fallback instead of the addon's
-    actual answer. The payload here always comes from stream_mode's
-    default (1, the fast dispatcher: no `stream_mode` key is ever put in
-    the request payload below), which yields exactly one "text" event
-    already holding the complete answer -- so reading the whole body at
-    once and taking that event is equivalent to a real incremental stream
-    for this single conversation turn.
+    That endpoint always streams Server-Sent Events -- a bare
+    `await response.json()` against it raises aiohttp.ContentTypeError
+    every time. The payload here always comes from stream_mode's default
+    (1, the fast dispatcher: no `stream_mode` key is ever put in the
+    request payload below), which yields exactly one "text" event already
+    holding the complete answer -- so reading the whole body at once and
+    taking that event is equivalent to a real incremental stream for this
+    single conversation turn.
     """
     response_text = None
     conversation_id = None
@@ -241,10 +330,12 @@ def _parse_sse_chat_response(raw_text: str) -> tuple[str | None, str | None]:
     return response_text, conversation_id
 
 
-def parse_control_intent(text: str) -> tuple[str | None, str | None, str | None]:
-    """Parse text into action, target base name, and domain tag."""
+def parse_control_intent(text: str) -> tuple[str | None, list[tuple[str, str | None]]]:
+    """Parse text into (action, clauses), where clauses is one or more
+    (target_base, category) pairs sharing the same trailing action verb --
+    2+ only for a compound command ("안방 등하고 선풍기 켜줘")."""
     if _DELAY_PHRASE_RE.search(text) or _is_schedule_query(text):
-        return None, None, None
+        return None, []
     clean = normalize_phonetics(text.strip())
 
     action_priority = [
@@ -259,11 +350,12 @@ def parse_control_intent(text: str) -> tuple[str | None, str | None, str | None]
             if clean.endswith(kw) or f" {kw}" in clean or clean == kw:
                 raw_target = clean[: clean.rfind(kw)].strip()
                 if not raw_target:
-                    return action_key, "", None
-                target_base, domain_tag = collapse_domain_suffixes(raw_target)
-                return action_key, target_base, domain_tag
+                    return action_key, [("", None)]
+                segments = _split_compound_target(raw_target)
+                clauses = [collapse_domain_suffixes(seg) for seg in segments]
+                return action_key, clauses
 
-    return None, None, None
+    return None, []
 
 
 async def async_setup_entry(
@@ -318,31 +410,65 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
             session.updated_at = now
         return session
 
-    def _find_target_entity(self, target_base: str, domain_tag: str | None, preferred_domains: tuple[str, ...]):
-        """Find the best matching entity across domains in Home Assistant."""
-        query_raw = target_base.replace(" ", "").lower()
-        all_states = self.hass.states.async_all()
+    def _resolve_target(
+        self, target_base: str, category: str | None, action: str
+    ) -> tuple[list[Any], str | None]:
+        """Resolve a target phrase to 0+ matching entities.
 
+        Domain is a SOFT signal, not a hard filter: a category names every
+        plausible domain (see DEVICE_CATEGORIES), and every one of them is
+        searched, since the same device type can live under different
+        domains from house to house. Room scoping is implicit in the name
+        matching below (a room name is normally part of the entity's own
+        friendly_name), but is backed by explicit tie-disambiguation: if
+        multiple entities score equally best, this asks which one instead
+        of silently guessing -- the "제어기기 스코핑" safety net.
+        """
+        all_states = self.hass.states.async_all()
+        whole_house = target_base in _WHOLE_HOUSE_WORDS
+
+        if category:
+            domains = DEVICE_CATEGORIES[category]["domains"]
+        elif action in ("open_cover", "close_cover", "stop_cover"):
+            domains = ("cover",)
+        elif action in ("media_play", "media_pause"):
+            domains = ("media_player",)
+        else:
+            domains = None
+
+        preferred_domains = domains or _CONTROLLABLE_DOMAINS
+
+        if whole_house:
+            return [s for s in all_states if s.domain in preferred_domains], None
+
+        query_raw = target_base.replace(" ", "").lower()
         candidates = []
         for state in all_states:
             domain = state.domain
+            if domain not in _CONTROLLABLE_DOMAINS:
+                # A physical device's helper entities (update/button/number/
+                # select/sensor for the same plug or bulb) often share its
+                # exact friendly_name -- e.g. update.dress_plug and
+                # switch.dress_plug both named "옷방 플러그" (confirmed live:
+                # this caused a false "which one?" tie before this filter).
+                # None of them are controllable anyway, so exclude the whole
+                # class up front instead of trying to out-score them.
+                continue
             fn = state.attributes.get("friendly_name") or ""
             eid = state.entity_id.lower()
 
             if not fn and not eid:
                 continue
 
-            fn_base, fn_domain = collapse_domain_suffixes(fn)
+            fn_base, fn_category = collapse_domain_suffixes(fn)
             fn_raw = fn.replace(" ", "").lower()
 
-            domain_bonus = 0
-            if domain_tag:
-                if domain == domain_tag or fn_domain == domain_tag:
-                    domain_bonus = 40
-                else:
-                    domain_bonus = -30
+            if domains:
+                domain_bonus = 40 if (domain in domains or fn_category == category) else -30
             elif domain in preferred_domains:
                 domain_bonus = 15
+            else:
+                domain_bonus = 0
 
             subtype_bonus = 0
             for subtype in ["스탠드", "화장대", "다운라이트", "선풍기", "환풍기", "실링팬"]:
@@ -353,20 +479,29 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
 
             if target_base and fn_base and target_base == fn_base:
                 candidates.append((100 + domain_bonus + subtype_bonus, state))
-            elif query_raw == fn_raw:
+            elif query_raw and query_raw == fn_raw:
                 candidates.append((90 + domain_bonus + subtype_bonus, state))
             elif target_base and fn_base and (target_base in fn_base or fn_base in target_base):
                 candidates.append((75 + domain_bonus + subtype_bonus, state))
-            elif query_raw in fn_raw or fn_raw in query_raw:
+            elif query_raw and (query_raw in fn_raw or fn_raw in query_raw):
                 candidates.append((65 + domain_bonus + subtype_bonus, state))
             elif target_base and target_base in eid.replace("_", ""):
                 candidates.append((50 + domain_bonus + subtype_bonus, state))
 
-        if candidates:
-            candidates.sort(key=lambda x: x[0], reverse=True)
-            if candidates[0][0] > 50:
-                return candidates[0][1]
-        return None
+        if not candidates:
+            return [], None
+
+        candidates.sort(key=lambda x: -x[0])
+        top_score = candidates[0][0]
+        if top_score <= 50:
+            return [], None
+
+        top_matches = [s for score, s in candidates if score == top_score]
+        if len(top_matches) == 1:
+            return top_matches, None
+
+        names = [s.attributes.get("friendly_name") or s.entity_id for s in top_matches[:6]]
+        return [], f"어느 것을 말씀하시는 걸까요? ({', '.join(names)} 중 하나로, 또는 '전체'라고 말씀해 주세요.)"
 
     def _generate_home_summary(self) -> str:
         """Dynamically generate a comprehensive smart home status summary."""
@@ -535,7 +670,12 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
         return "현재 시스템에 기록된 치명적인 에러는 없습니다."
 
     async def _handle_special_macros(self, text: str, session: ConversationSession) -> str | None:
-        """Handle batch controls, modes, radio, and special macro commands."""
+        """Handle batch controls, modes, radio, and special macro commands.
+
+        Temperature is deliberately NOT handled here anymore -- see
+        _handle_percent_or_temperature(), which applies room scoping
+        instead of grabbing the first climate entity in the house.
+        """
         clean = normalize_phonetics(text.strip().replace(" ", "").lower())
 
         # System Error Logs Query (에러 로그, 시스템 로그, 오류 확인)
@@ -555,7 +695,7 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
                 session.topic = "device"
                 return self._generate_room_lights_summary()
 
-        # 1. Broad Home Status / Situation / Summary Intent (집의 종합 상황, 분위기, 현황, 상태 요약 등 모든 표현 자동 포괄)
+        # 1. Broad Home Status / Situation / Summary Intent
         if any(w in clean for w in ["상태", "상황", "현황", "요약", "브리핑", "분위기", "어때", "어떠", "어떻", "집안", "우리집", "모습"]):
             if not any(ctrl in clean for ctrl in ["켜", "꺼", "틀어", "시작", "정지", "닫아", "열어", "작동", "돌려"]):
                 session.topic = "summary"
@@ -612,16 +752,61 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
                         await self.hass.services.async_call("media_player", "media_stop", {"entity_id": s.entity_id}, blocking=True)
                 return "라디오 재생을 중지했습니다."
 
-        # 6. Temperature Adjustment (에어컨 26도로 맞춰줘, 24도로 틀어)
-        temp_match = re.search(r"(\d{1,2})\s*도", text)
-        if temp_match and any(w in clean for w in ["에어컨", "난방", "온도", "맞춰", "설정"]):
+        return None
+
+    async def _handle_percent_or_temperature(self, text: str, session: ConversationSession) -> str | None:
+        """Number-bearing settings that carry no on/off verb at all
+        ("26도로 맞춰줘", "50%로 해줘") -- checked before the verb-keyword
+        gate below, same as the addon's own ordering, and routed through
+        _resolve_target() so these get the same room scoping as everything
+        else instead of grabbing the first matching entity in the house.
+        """
+        clean = normalize_phonetics(text.strip().replace(" ", "").lower())
+
+        temp_match = _TEMPERATURE_RE.search(text)
+        if temp_match and any(w in clean for w in ["에어컨", "에어콘", "난방", "냉방", "온도", "맞춰", "설정"]):
             target_temp = float(temp_match.group(1))
-            climate_states = [s for s in self.hass.states.async_all() if s.domain == "climate"]
-            if climate_states:
-                target_climate = climate_states[0].entity_id
-                await self.hass.services.async_call("climate", "set_temperature", {"entity_id": target_climate, "temperature": target_temp}, blocking=True)
-                session.topic = "climate"
-                return f"온도를 {int(target_temp)}°C로 설정했습니다."
+            stripped = _strip_setting_words(clean.replace(f"{temp_match.group(1)}도", ""))
+            target_base, _ = collapse_domain_suffixes(stripped)
+            targets, err = self._resolve_target(target_base, "climate", "turn_on")
+            if err:
+                return err
+            if not targets:
+                return None
+            for t in targets:
+                await self.hass.services.async_call(
+                    "climate", "set_temperature", {"entity_id": t.entity_id, "temperature": target_temp}, blocking=True
+                )
+                session.last_entity_id = t.entity_id
+            names = [t.attributes.get("friendly_name") or t.entity_id for t in targets]
+            return f"{', '.join(names)} 목표 온도를 {int(target_temp)}도로 설정했습니다."
+
+        pct_match = _PERCENT_RE.search(clean)
+        if pct_match:
+            is_fan = any(w in clean for w in DEVICE_CATEGORIES["fan"]["suffixes"])
+            is_light = any(w in clean for w in DEVICE_CATEGORIES["light"]["suffixes"])
+            if is_fan or is_light:
+                pct = int(pct_match.group(1))
+                category = "fan" if is_fan else "light"
+                stripped = _strip_setting_words(clean[: pct_match.start()] + clean[pct_match.end():])
+                target_base, _ = collapse_domain_suffixes(stripped)
+                targets, err = self._resolve_target(target_base, category, "turn_on")
+                if err:
+                    return err
+                if not targets:
+                    return None
+                for t in targets:
+                    if t.domain == "fan":
+                        await self.hass.services.async_call(
+                            "fan", "set_percentage", {"entity_id": t.entity_id, "percentage": pct}, blocking=True
+                        )
+                    else:
+                        await self.hass.services.async_call(
+                            "light", "turn_on", {"entity_id": t.entity_id, "brightness_pct": pct}, blocking=True
+                        )
+                    session.last_entity_id = t.entity_id
+                names = [t.attributes.get("friendly_name") or t.entity_id for t in targets]
+                return f"{', '.join(names)}을(를) {pct}%로 설정했습니다."
 
         return None
 
@@ -829,115 +1014,137 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
         return None
 
     async def _execute_domain_control(
-        self, action: str, target_base: str, domain_tag: str | None, session: ConversationSession
+        self, action: str, clauses: list[tuple[str, str | None]], session: ConversationSession
     ) -> str | None:
-        """Execute domain-specific Home Assistant service and return natural speech response."""
-        if not target_base or target_base in ("그거", "그것도", "다시", "그거꺼", "그거켜"):
-            if session.last_entity_id:
-                matched_state = self.hass.states.get(session.last_entity_id)
-            else:
-                return None
-        else:
-            if action in ("open_cover", "close_cover", "stop_cover"):
-                preferred_domains = ("cover", "blind", "curtain")
-            elif action in ("media_play", "media_pause"):
-                preferred_domains = ("media_player",)
-            else:
-                preferred_domains = ("light", "switch", "cover", "fan", "climate", "media_player", "automation", "scene", "script")
+        """Execute one shared action across 1+ resolved device clauses (2+
+        only for a compound command like "안방 등하고 선풍기 켜줘").
 
-            matched_state = self._find_target_entity(target_base, domain_tag, preferred_domains)
+        Safety: a dangerous appliance (see DEVICE_CATEGORIES["appliance"])
+        is NEVER turned off immediately, regardless of how it was resolved
+        (named directly, or via a bare "그거" follow-up) -- its category is
+        re-derived straight from the resolved entity's own friendly_name
+        right before executing, so a follow-up can't accidentally skip the
+        gate a direct command would have hit. It's queued on
+        session.pending_confirm and only runs after an explicit "응" on the
+        next turn, mirroring the confirmation gate the addon itself
+        enforces on its primary path.
+        """
+        resolved: list[Any] = []
+        errors: list[str] = []
 
-        if not matched_state:
-            return None
+        for target_base, category in clauses:
+            if not target_base or target_base in ("그거", "그것도", "다시", "그거꺼", "그거켜"):
+                if session.last_entity_id:
+                    matched_state = self.hass.states.get(session.last_entity_id)
+                    if matched_state:
+                        resolved.append(matched_state)
+                continue
+            targets, err = self._resolve_target(target_base, category, action)
+            if err:
+                errors.append(err)
+                continue
+            resolved.extend(targets)
 
-        domain = matched_state.domain
-        entity_id = matched_state.entity_id
-        friendly_name = matched_state.attributes.get("friendly_name") or entity_id
+        if not resolved:
+            return "\n".join(errors) if errors else None
 
-        session.topic = "device"
-        session.last_entity_id = entity_id
-        session.last_entity_name = friendly_name
-        session.last_domain = domain
-        for room in ["안방", "거실", "작은방", "화장실", "주방", "베란다"]:
-            if room in friendly_name:
-                session.last_room = room
-                break
+        to_confirm = []
+        messages = []
 
-        service_domain = domain
-        service_data = {"entity_id": entity_id}
-        speech_verb = "처리했습니다"
+        for matched_state in resolved:
+            domain = matched_state.domain
+            entity_id = matched_state.entity_id
+            friendly_name = matched_state.attributes.get("friendly_name") or entity_id
+            _, entity_category = collapse_domain_suffixes(friendly_name)
 
-        if action == "turn_on":
-            if domain in ("scene", "script"):
-                service = "turn_on"
-            elif domain in ("light", "switch", "fan", "climate", "media_player", "automation"):
-                service = "turn_on"
-            elif domain == "cover":
-                service = "open_cover"
-                speech_verb = "열었습니다"
-            else:
-                service_domain = "homeassistant"
-                service = "turn_on"
-            if speech_verb == "처리했습니다":
-                speech_verb = "켰습니다" if domain in ("light", "switch", "fan", "climate", "media_player") else "실행했습니다"
+            real_action = action
+            if action == "toggle":
+                real_action = "turn_off" if _is_entity_on(matched_state) else "turn_on"
 
-        elif action == "turn_off":
-            if domain in ("light", "switch", "fan", "climate", "media_player", "automation"):
-                service = "turn_off"
-            elif domain == "cover":
-                service = "close_cover"
-                speech_verb = "닫았습니다"
-            else:
-                service_domain = "homeassistant"
-                service = "turn_off"
-            if speech_verb == "처리했습니다":
-                speech_verb = "껐습니다" if domain in ("light", "switch", "fan", "climate", "media_player") else "중지했습니다"
+            service_domain, service, speech_verb = _service_for_action(domain, real_action)
+            if not service:
+                continue
 
-        elif action == "toggle":
-            service_domain = "homeassistant"
-            service = "toggle"
-            speech_verb = "상태를 전환했습니다"
+            session.last_entity_id = entity_id
+            for room in ROOMS:
+                if room in friendly_name:
+                    session.last_room = room
+                    break
 
-        elif action == "open_cover":
-            service = "open_cover"
-            speech_verb = "열었습니다"
+            if entity_category == "appliance" and real_action == "turn_off":
+                to_confirm.append({"domain": service_domain, "service": service, "entity_id": entity_id, "name": friendly_name})
+                continue
 
-        elif action == "close_cover":
-            service = "close_cover"
-            speech_verb = "닫았습니다"
+            try:
+                await self.hass.services.async_call(service_domain, service, {"entity_id": entity_id}, blocking=True)
+                messages.append(f"{friendly_name}을(를) {speech_verb}.")
+            except Exception as ex:
+                _LOGGER.error("Local fallback failed to execute %s.%s on %s: %s", service_domain, service, entity_id, ex)
+                continue
 
-        elif action == "stop_cover":
-            service = "stop_cover"
-            speech_verb = "멈췄습니다"
-
-        elif action == "media_play":
-            service = "media_play"
-            speech_verb = "재생합니다"
-
-        elif action == "media_pause":
-            service = "media_pause"
-            speech_verb = "일시정지했습니다"
-
-        else:
-            return None
-
-        try:
-            await self.hass.services.async_call(
-                service_domain,
-                service,
-                service_data,
-                blocking=True,
+        if to_confirm:
+            session.pending_confirm = {
+                "calls": [{"domain": c["domain"], "service": c["service"], "entity_id": c["entity_id"]} for c in to_confirm],
+                "names": [c["name"] for c in to_confirm],
+            }
+            names = [c["name"] for c in to_confirm]
+            messages.append(
+                f"⚠️ {', '.join(names)}을(를) 정말 끄시겠어요? "
+                f"끄면 불편이 생길 수 있는 기기입니다. 계속하시려면 \"응\"이라고 답해주세요."
             )
-            return f"{friendly_name}을(를) {speech_verb}."
-        except Exception as ex:
-            _LOGGER.error("Failed to execute %s.%s on %s: %s", service_domain, service, entity_id, ex)
-            return None
+
+        return "\n".join(messages) if messages else None
+
+    async def _handle_local_fallback(self, text: str, session: ConversationSession) -> str | None:
+        """Second line of defense -- only ever called once the addon's own
+        /api/chat has failed on every host this turn (see async_process()).
+        A best-effort substitute, not a replacement: less thorough than the
+        addon's own engine, but a dangerous appliance still never turns off
+        without an explicit "응".
+        """
+        clean = normalize_phonetics(text.strip().replace(" ", "").lower())
+
+        if session.pending_confirm:
+            pending = session.pending_confirm
+            session.pending_confirm = None
+            if any(clean == w or clean.startswith(w) for w in _AFFIRMATIVE_WORDS):
+                for call in pending["calls"]:
+                    await self.hass.services.async_call(call["domain"], call["service"], {"entity_id": call["entity_id"]}, blocking=True)
+                names = pending["names"]
+                return f"확인했습니다 -- {', '.join(names)}을(를) 껐습니다."
+            if any(clean == w or clean.startswith(w) for w in _NEGATIVE_WORDS):
+                names = pending["names"]
+                return f"취소했습니다. {', '.join(names)} 그대로 두겠습니다."
+            # Not a yes/no -- treat as a brand-new command instead (matches
+            # the addon's own pending-confirmation semantics: an unrelated
+            # reply silently drops the stale confirmation rather than
+            # blocking it).
+
+        macro_speech = await self._handle_special_macros(text, session)
+        if macro_speech:
+            return macro_speech
+
+        pct_or_temp_speech = await self._handle_percent_or_temperature(text, session)
+        if pct_or_temp_speech:
+            return pct_or_temp_speech
+
+        action, clauses = parse_control_intent(text)
+        if action:
+            speech = await self._execute_domain_control(action, clauses, session)
+            if speech:
+                return speech
+
+        return None
 
     async def async_process(self, user_input: ConversationInput) -> ConversationResult:
-        """Process a prompt with /llm trigger, sensory queries, session memory, and LLM fallback."""
+        """Try the addon's own /api/chat first -- its fast-dispatch engine
+        covers room-scoped control, confirmation gates, and every info
+        query with more rigor than this integration can match locally.
+        Local processing (_handle_local_fallback / _handle_info_query)
+        only ever runs as a second line of defense, when the addon is
+        completely unreachable this turn.
+        """
         intent_response = intent.IntentResponse(language=user_input.language)
-        mode = self.processing_mode
-        session = self._get_or_create_session(user_input.conversation_id)
 
         raw_text = user_input.text.strip()
         force_llm = False
@@ -950,44 +1157,6 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
                 target_prompt = raw_text[len(prefix):].strip()
                 break
 
-        # 1. Local fast matching & Macros (strictly bypassed if force_llm is True or mode is llm_mcp)
-        if not force_llm and mode in (MODE_HYBRID, MODE_FAST_LOCAL):
-            macro_speech = await self._handle_special_macros(target_prompt, session)
-            if macro_speech:
-                intent_response.async_set_speech(macro_speech)
-                return ConversationResult(
-                    response=intent_response,
-                    conversation_id=user_input.conversation_id,
-                )
-
-            action, target_base, domain_tag = parse_control_intent(target_prompt)
-            if action and (target_base or session.last_entity_id):
-                speech = await self._execute_domain_control(action, target_base, domain_tag, session)
-                if speech:
-                    intent_response.async_set_speech(speech)
-                    return ConversationResult(
-                        response=intent_response,
-                        conversation_id=user_input.conversation_id,
-                    )
-
-            info_speech = self._handle_info_query(target_prompt, session)
-            if info_speech:
-                intent_response.async_set_speech(info_speech)
-                return ConversationResult(
-                    response=intent_response,
-                    conversation_id=user_input.conversation_id,
-                )
-
-            if mode == MODE_FAST_LOCAL:
-                intent_response.async_set_speech(
-                    f"'{target_prompt}'에 해당하는 로컬 기기나 정보를 찾을 수 없습니다."
-                )
-                return ConversationResult(
-                    response=intent_response,
-                    conversation_id=user_input.conversation_id,
-                )
-
-        # 2. Antigravity CLI LLM + ha-mcp Dispatch with Context Snapshot
         http_session = async_get_clientsession(self.hass)
         host_candidates = [self.coordinator.host]
         for fallback in ["local-antigravity-cli", "127.0.0.1", "localhost"]:
@@ -1001,9 +1170,6 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
         payload = {
             "prompt": target_prompt,
             "conversation_id": user_input.conversation_id,
-            "language": user_input.language,
-            "mode": mode,
-            "home_summary": self._generate_home_summary(),
             "is_direct_llm": force_llm,
         }
 
@@ -1014,8 +1180,8 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
                 async with asyncio.timeout(65):
                     async with http_session.post(url, json=payload, headers=headers) as response:
                         if response.status == 200:
-                            raw_text = await response.text()
-                            response_text, conv_id = _parse_sse_chat_response(raw_text)
+                            raw_body = await response.text()
+                            response_text, conv_id = _parse_sse_chat_response(raw_body)
                             intent_response.async_set_speech(response_text or "답변을 생성할 수 없습니다.")
                             return ConversationResult(
                                 response=intent_response,
@@ -1034,9 +1200,13 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
                 last_error = err
                 continue
 
-        # If addon API is offline, use intelligent local fallback synthesis
-        fallback_speech = self._handle_info_query(target_prompt, session) or self._generate_home_summary()
-        intent_response.async_set_speech(fallback_speech)
+        # Addon unreachable on every host this turn -- second line of defense.
+        _LOGGER.warning("Antigravity CLI addon unreachable (%s) -- falling back to local processing for: %s", last_error, target_prompt)
+        session = self._get_or_create_session(user_input.conversation_id)
+        local_speech = await self._handle_local_fallback(target_prompt, session)
+        if not local_speech:
+            local_speech = self._handle_info_query(target_prompt, session) or self._generate_home_summary()
+        intent_response.async_set_speech(f"⚠️ (애드온 응답 없음, 로컬로 처리) {local_speech}")
         return ConversationResult(
             response=intent_response,
             conversation_id=user_input.conversation_id,
