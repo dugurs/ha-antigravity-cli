@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+import json
 import logging
 import os
 import re
@@ -174,8 +175,76 @@ def collapse_domain_suffixes(text: str) -> tuple[str, str | None]:
     return clean or normalize_phonetics(text.strip().replace(" ", "").lower()), detected_domain
 
 
+# A relative-delay expression ("5초 후에", "10분 뒤", "1시간 있다가") means the
+# addon's scheduler (core/ha_client.py's _schedule_delayed_control) needs to
+# handle this command, not the instant local turn_on/turn_off match below --
+# parse_control_intent() only looks at the trailing action keyword, so
+# without this guard "안방 등 5초 후에 꺼줘" matched "꺼줘", executed
+# turn_off immediately, and the delay wording was silently dropped as part
+# of the (unused) target string.
+_DELAY_PHRASE_RE = re.compile(r"\d+\s*(?:초|분|시간)\s*(?:뒤|후|있다가|있으면|있다)")
+
+# "예약 실행 목록 보여줘" (list pending scheduled commands) is a QUESTION, but
+# parse_control_intent()'s keyword check isn't anchored to the end of the
+# sentence (`f" {kw}" in clean` matches anywhere) -- confirmed live: this
+# text matched the "실행" keyword mid-sentence, treated "예약" as the target,
+# and fuzzy-matched it against sensor.backup_next_scheduled_automatic_backup
+# (friendly name contains "예약"), replying with a false "실행했습니다" as if
+# a backup had just been triggered (it hadn't -- turn_on against a read-only
+# sensor is a no-op HA service call, but the reply claimed success anyway).
+# Mirrors core/ha_client.py's is_scheduled_controls_query() in the addon so
+# this question reaches that real handler instead.
+_SCHEDULE_QUERY_WORDS = ("목록", "리스트", "몇개", "몇 개", "개수", "뭐있", "뭐 있", "보여줘", "알려줘", "확인")
+
+
+def _is_schedule_query(text: str) -> bool:
+    clean = text.replace(" ", "")
+    if "예약" not in clean:
+        return False
+    if any(w.replace(" ", "") in clean for w in _SCHEDULE_QUERY_WORDS):
+        return True
+    return text.rstrip().endswith("?")
+
+
+def _parse_sse_chat_response(raw_text: str) -> tuple[str | None, str | None]:
+    """Extract (final speech text, conversation id) from the addon's
+    /api/chat body.
+
+    That endpoint always streams Server-Sent Events (see
+    core/streamer.py's make_sse()/stream_fast_dashboard()), never a plain
+    JSON object -- a bare `await response.json()` against it raises
+    aiohttp.ContentTypeError every time, which used to mean every command
+    that fell through past the local fast-match below silently landed on
+    the "addon offline" local-summary fallback instead of the addon's
+    actual answer. The payload here always comes from stream_mode's
+    default (1, the fast dispatcher: no `stream_mode` key is ever put in
+    the request payload below), which yields exactly one "text" event
+    already holding the complete answer -- so reading the whole body at
+    once and taking that event is equivalent to a real incremental stream
+    for this single conversation turn.
+    """
+    response_text = None
+    conversation_id = None
+    for block in raw_text.split("\n\n"):
+        block = block.strip()
+        if not block.startswith("data:"):
+            continue
+        try:
+            event = json.loads(block[len("data:"):].strip())
+        except (json.JSONDecodeError, ValueError):
+            continue
+        event_type = event.get("type")
+        if event_type == "text" and event.get("content"):
+            response_text = event["content"]
+        elif event_type == "session_init" and event.get("content"):
+            conversation_id = event["content"]
+    return response_text, conversation_id
+
+
 def parse_control_intent(text: str) -> tuple[str | None, str | None, str | None]:
     """Parse text into action, target base name, and domain tag."""
+    if _DELAY_PHRASE_RE.search(text) or _is_schedule_query(text):
+        return None, None, None
     clean = normalize_phonetics(text.strip())
 
     action_priority = [
@@ -945,12 +1014,12 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
                 async with asyncio.timeout(65):
                     async with http_session.post(url, json=payload, headers=headers) as response:
                         if response.status == 200:
-                            data = await response.json()
-                            response_text = data.get("response", "답변을 생성할 수 없습니다.")
-                            intent_response.async_set_speech(response_text)
+                            raw_text = await response.text()
+                            response_text, conv_id = _parse_sse_chat_response(raw_text)
+                            intent_response.async_set_speech(response_text or "답변을 생성할 수 없습니다.")
                             return ConversationResult(
                                 response=intent_response,
-                                conversation_id=data.get("conversation_id", user_input.conversation_id),
+                                conversation_id=conv_id or user_input.conversation_id,
                             )
                         elif response.status == 401:
                             intent_response.async_set_error(

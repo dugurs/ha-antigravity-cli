@@ -51,6 +51,12 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
     ),
+    SensorEntityDescription(
+        key="scheduled_count",
+        translation_key="scheduled_count",
+        icon="mdi:calendar-clock",
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
 )
 
 
@@ -88,3 +94,13 @@ class AntigravitySensor(AntigravityEntity, SensorEntity):
         if not self.coordinator.data:
             return None
         return self.coordinator.data.get(self.entity_description.key)
+
+    @property
+    def extra_state_attributes(self) -> dict | None:
+        """예약 목록 (scheduled_list) as an attribute on the count sensor --
+        each entry's remaining_seconds/description, straight from the
+        addon's /api/status (see core/ha_client.py's get_scheduled_controls()
+        and antigravity_api.py's do_GET /api/status)."""
+        if self.entity_description.key != "scheduled_count" or not self.coordinator.data:
+            return None
+        return {"scheduled_list": self.coordinator.data.get("scheduled_list", [])}

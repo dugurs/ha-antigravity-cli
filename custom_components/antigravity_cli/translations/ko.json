@@ -49,6 +49,9 @@
       },
       "cpu_usage": {
         "name": "CPU 사용률"
+      },
+      "scheduled_count": {
+        "name": "예약된 실행 개수"
       }
     },
     "button": {

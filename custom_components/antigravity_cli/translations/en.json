@@ -43,6 +43,9 @@
       },
       "uptime": {
         "name": "Uptime"
+      },
+      "scheduled_count": {
+        "name": "Scheduled Executions"
       }
     },
     "button": {
