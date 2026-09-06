@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from homeassistant.components.button import ButtonEntity, ButtonEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -12,18 +11,11 @@ from .const import DOMAIN
 from .coordinator import AntigravityDataUpdateCoordinator
 from .entity import AntigravityEntity
 
-_LOGGER = logging.getLogger(__name__)
-
 BUTTON_TYPES: tuple[ButtonEntityDescription, ...] = (
     ButtonEntityDescription(
         key="sync_status",
         translation_key="sync_status",
         icon="mdi:sync",
-    ),
-    ButtonEntityDescription(
-        key="restart_agent",
-        translation_key="restart_agent",
-        icon="mdi:restart",
     ),
 )
 
@@ -58,6 +50,4 @@ class AntigravityButton(AntigravityEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         """Handle the button press."""
-        _LOGGER.info("Button pressed: %s", self.entity_description.key)
-        if self.entity_description.key == "sync_status":
-            await self.coordinator.async_request_refresh()
+        await self.coordinator.async_request_refresh()

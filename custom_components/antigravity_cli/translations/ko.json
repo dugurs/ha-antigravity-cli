@@ -57,26 +57,11 @@
     "button": {
       "sync_status": {
         "name": "상태 동기화"
-      },
-      "restart_agent": {
-        "name": "에이전트 재시작"
       }
     },
     "conversation": {
       "assistant": {
         "name": "어시스턴트"
-      }
-    }
-  },
-  "services": {
-    "run_command": {
-      "name": "명령어 실행",
-      "description": "Antigravity CLI 에이전트를 통해 명령어를 실행합니다.",
-      "fields": {
-        "command": {
-          "name": "명령어",
-          "description": "실행할 명령어 문자열입니다."
-        }
       }
     }
   }

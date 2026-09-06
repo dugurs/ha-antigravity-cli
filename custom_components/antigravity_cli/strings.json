@@ -57,26 +57,11 @@
     "button": {
       "sync_status": {
         "name": "Sync Status"
-      },
-      "restart_agent": {
-        "name": "Restart Agent"
       }
     },
     "conversation": {
       "assistant": {
         "name": "Assistant"
-      }
-    }
-  },
-  "services": {
-    "run_command": {
-      "name": "Run Command",
-      "description": "Executes a command via the Antigravity CLI agent.",
-      "fields": {
-        "command": {
-          "name": "Command",
-          "description": "The command string to execute."
-        }
       }
     }
   }
