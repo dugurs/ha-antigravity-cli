@@ -38,6 +38,25 @@
       "status": {
         "name": "상태"
       },
+      "daemon_status": {
+        "name": "데몬 상태",
+        "state": {
+          "running": "실행 중",
+          "stopped": "정지됨",
+          "offline": "오프라인"
+        }
+      },
+      "agent_activity": {
+        "name": "에이전트 작업 상태",
+        "state": {
+          "idle": "대기 중",
+          "thinking": "추론 중",
+          "file_working": "파일 작업 중",
+          "executing_tool": "도구 실행 중",
+          "stopped": "정지됨",
+          "offline": "오프라인"
+        }
+      },
       "active_sessions": {
         "name": "활성 세션 수"
       },
@@ -54,9 +73,19 @@
         "name": "예약된 실행 개수"
       }
     },
+    "binary_sensor": {
+      "remote_control_daemon": {
+        "name": "리모트 제어 데몬"
+      }
+    },
     "button": {
       "sync_status": {
         "name": "상태 동기화"
+      }
+    },
+    "switch": {
+      "remote_control": {
+        "name": "리모트 제어 데몬"
       }
     },
     "conversation": {

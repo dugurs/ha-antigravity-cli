@@ -32,6 +32,8 @@ DEFAULT_PROCESSING_MODE: Final = MODE_HYBRID
 # Platforms
 PLATFORMS: Final = [
     "sensor",
+    "binary_sensor",
     "button",
+    "switch",
     "conversation",
 ]

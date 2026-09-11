@@ -38,19 +38,54 @@
       "status": {
         "name": "Status"
       },
+      "daemon_status": {
+        "name": "Daemon Status",
+        "state": {
+          "running": "Running",
+          "stopped": "Stopped",
+          "offline": "Offline"
+        }
+      },
+      "agent_activity": {
+        "name": "Agent Activity",
+        "state": {
+          "idle": "Idle",
+          "thinking": "Thinking",
+          "file_working": "File Operation",
+          "executing_tool": "Executing Tool",
+          "stopped": "Stopped",
+          "offline": "Offline"
+        }
+      },
       "active_sessions": {
         "name": "Active Sessions"
       },
       "uptime": {
         "name": "Uptime"
       },
+      "memory_usage": {
+        "name": "Memory Usage"
+      },
+      "cpu_usage": {
+        "name": "CPU Usage"
+      },
       "scheduled_count": {
         "name": "Scheduled Executions"
+      }
+    },
+    "binary_sensor": {
+      "remote_control_daemon": {
+        "name": "Remote Control Daemon"
       }
     },
     "button": {
       "sync_status": {
         "name": "Sync Status"
+      }
+    },
+    "switch": {
+      "remote_control": {
+        "name": "Remote Control Daemon"
       }
     },
     "conversation": {

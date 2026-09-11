@@ -3,16 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
 import json
 import logging
 import os
 import re
 import time
+from dataclasses import dataclass
 from typing import Any, Literal
-import aiohttp
 
-from homeassistant.components import conversation
+import aiohttp
 from homeassistant.components.conversation import (
     ConversationEntity,
     ConversationEntityFeature,
@@ -654,9 +653,9 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
         for p in ["/config/home-assistant.log", "/homeassistant/home-assistant.log"]:
             if os.path.exists(p):
                 try:
-                    with open(p, "r", encoding="utf-8", errors="ignore") as f:
+                    with open(p, encoding="utf-8", errors="ignore") as f:
                         lines = f.readlines()
-                    errors = [l.strip() for l in lines if " ERROR " in l or " CRITICAL " in l]
+                    errors = [line_entry.strip() for line_entry in lines if " ERROR " in line_entry or " CRITICAL " in line_entry]
                     if errors:
                         recent = errors[-3:]
                         formatted = []
@@ -929,7 +928,7 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
             if total_gb == 0 and os.path.exists("/proc/meminfo"):
                 try:
                     mem = {}
-                    with open("/proc/meminfo", "r") as f:
+                    with open("/proc/meminfo") as f:
                         for line in f:
                             parts = line.split(":")
                             if len(parts) == 2:

@@ -6,12 +6,12 @@ import logging
 from typing import Any
 
 import aiohttp
+import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers import selector
-import voluptuous as vol
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
     CONF_API_KEY,
@@ -28,7 +28,6 @@ from .const import (
     MODE_HYBRID,
     MODE_LLM_MCP,
     NAME,
-    PROCESSING_MODES,
 )
 
 _LOGGER = logging.getLogger(__name__)

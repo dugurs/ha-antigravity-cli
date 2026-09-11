@@ -24,6 +24,16 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         icon="mdi:robot",
     ),
     SensorEntityDescription(
+        key="daemon_status",
+        translation_key="daemon_status",
+        icon="mdi:server-cog",
+    ),
+    SensorEntityDescription(
+        key="agent_activity",
+        translation_key="agent_activity",
+        icon="mdi:brain",
+    ),
+    SensorEntityDescription(
         key="active_sessions",
         translation_key="active_sessions",
         icon="mdi:counter",
@@ -93,14 +103,58 @@ class AntigravitySensor(AntigravityEntity, SensorEntity):
         """Return the native value of the sensor."""
         if not self.coordinator.data:
             return None
+        if self.entity_description.key == "daemon_status":
+            if self.coordinator.data.get("status") == "offline":
+                return "offline"
+            return (
+                "running"
+                if self.coordinator.data.get("remote_control_running")
+                else "stopped"
+            )
+        if self.entity_description.key == "agent_activity":
+            if self.coordinator.data.get("status") == "offline":
+                return "offline"
+            activity = self.coordinator.data.get("activity") or {}
+            return activity.get("state", "idle")
         return self.coordinator.data.get(self.entity_description.key)
 
     @property
+    def icon(self) -> str | None:
+        """Return the icon based on current activity state."""
+        if self.entity_description.key == "agent_activity":
+            val = self.native_value
+            if val == "file_working":
+                return "mdi:file-edit"
+            if val == "thinking":
+                return "mdi:brain"
+            if val == "executing_tool":
+                return "mdi:tools"
+            if val == "offline":
+                return "mdi:cloud-off-outline"
+            if val == "idle":
+                return "mdi:sleep"
+        return self.entity_description.icon
+
+    @property
     def extra_state_attributes(self) -> dict | None:
-        """예약 목록 (scheduled_list) as an attribute on the count sensor --
-        each entry's remaining_seconds/description, straight from the
-        addon's /api/status (see core/ha_client.py's get_scheduled_controls()
-        and antigravity_api.py's do_GET /api/status)."""
-        if self.entity_description.key != "scheduled_count" or not self.coordinator.data:
+        """Return extra state attributes."""
+        if not self.coordinator.data:
             return None
-        return {"scheduled_list": self.coordinator.data.get("scheduled_list", [])}
+        if self.entity_description.key == "scheduled_count":
+            return {"scheduled_list": self.coordinator.data.get("scheduled_list", [])}
+        if self.entity_description.key == "daemon_status":
+            return {
+                "remote_control_running": bool(
+                    self.coordinator.data.get("remote_control_running", False)
+                )
+            }
+        if self.entity_description.key == "agent_activity":
+            activity = self.coordinator.data.get("activity") or {}
+            return {
+                "is_busy": bool(activity.get("is_busy", False)),
+                "lock_active": bool(activity.get("is_busy", False)),
+                "current_tool": activity.get("current_tool"),
+                "target_file": activity.get("target_file"),
+                "reason": activity.get("reason"),
+            }
+        return None

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import timedelta
 import logging
+from datetime import timedelta
 from typing import Any
 
 import aiohttp
@@ -33,6 +33,7 @@ class AntigravityDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         """Initialize the coordinator."""
         self.entry = entry
+        self.config_entry = entry
         self.host = entry.options.get(CONF_HOST, entry.data[CONF_HOST])
         self.port = entry.options.get(CONF_PORT, entry.data[CONF_PORT])
         self.api_key = entry.options.get(CONF_API_KEY, entry.data.get(CONF_API_KEY))
@@ -42,6 +43,7 @@ class AntigravityDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=entry,
             name=f"{DOMAIN}_{self.host}_{self.port}",
             update_interval=timedelta(seconds=poll_interval),
         )
@@ -69,7 +71,7 @@ class AntigravityDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             return await response.json()
                         elif response.status == 401:
                             raise UpdateFailed("Antigravity CLI authentication failed")
-            except (asyncio.TimeoutError, aiohttp.ClientError) as err:
+            except (TimeoutError, aiohttp.ClientError) as err:
                 last_err = err
                 continue
 
@@ -80,4 +82,14 @@ class AntigravityDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "version": "unknown",
             "active_sessions": 0,
             "uptime": 0,
+            "remote_control_running": False,
+            "activity": {
+                "state": "offline",
+                "is_busy": False,
+                "reason": None,
+                "current_tool": None,
+                "target_file": None,
+            },
+            "scheduled_count": 0,
+            "scheduled_list": [],
         }
