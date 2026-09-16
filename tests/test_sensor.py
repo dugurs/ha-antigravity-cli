@@ -54,7 +54,9 @@ async def test_sensor_setup_and_values(hass: HomeAssistant) -> None:
             "scheduled_list": [{"id": 1, "action": "turn_off"}],
             "usage": {
                 "gemini_weekly_remaining": 85.5,
+                "gemini_5h_remaining": 90.0,
                 "claude_weekly_remaining": 92.0,
+                "claude_5h_remaining": 95.0,
             },
         }
         hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
@@ -62,7 +64,7 @@ async def test_sensor_setup_and_values(hass: HomeAssistant) -> None:
         entities: list[AntigravitySensor] = []
         await async_setup_entry(hass, entry, entities.extend)
 
-        assert len(entities) == 10
+        assert len(entities) == 12
         sensor_by_key = {entity.entity_description.key: entity for entity in entities}
 
         assert sensor_by_key["status"].native_value == "online"
@@ -89,8 +91,12 @@ async def test_sensor_setup_and_values(hass: HomeAssistant) -> None:
         }
         assert sensor_by_key["gemini_quota"].native_value == 85.5
         assert sensor_by_key["gemini_quota"].native_unit_of_measurement == "%"
+        assert sensor_by_key["gemini_5h_quota"].native_value == 90.0
+        assert sensor_by_key["gemini_5h_quota"].native_unit_of_measurement == "%"
         assert sensor_by_key["claude_quota"].native_value == 92.0
         assert sensor_by_key["claude_quota"].native_unit_of_measurement == "%"
+        assert sensor_by_key["claude_5h_quota"].native_value == 95.0
+        assert sensor_by_key["claude_5h_quota"].native_unit_of_measurement == "%"
 
         # Test file_working activity state
         coordinator.data["activity"] = {

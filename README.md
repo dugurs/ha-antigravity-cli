@@ -24,7 +24,7 @@ Home Assistant의 기본 음성/텍스트 어시스턴트인 **Assist**를 [`ant
 애드온의 `/api/status`를 주기적으로 폴링해(기본 30초) 센서로 노출합니다:
 - **상태 및 모니터링**: 상태(`status`), 활성 세션 수(`active_sessions`), 가동 시간(`uptime`), 메모리 사용량(`memory_usage`), CPU 사용률(`cpu_usage`), 예약된 실행 개수(`scheduled_count` — 예약된 지연 명령 목록이 `scheduled_list` 속성으로 함께 노출됨).
 - **에이전트 실시간 상태**: 데몬 상태(`daemon_status`), 에이전트 작업 상태(`agent_activity` — 대기 중 / 추론 중 / 파일 작업 중 / 도구 실행 중).
-- **모델 사용량 잔여 쿼터 (메모리 0% 오버헤드 보장)**: `gemini_quota`, `claude_quota` (웹 UI 등에서 워밍업된 캐시 데이터만 직접 참조하여 추가 서브프로세스 및 RAM 소모 없음).
+- **모델 사용량 잔여 쿼터 (메모리 0% 오버헤드 보장)**: 주간 잔여율(`gemini_quota`, `claude_quota`) 및 5시간 윈도우 잔여율(`gemini_5h_quota`, `claude_5h_quota`) (웹 UI 등에서 워밍업된 캐시 데이터만 직접 참조하여 추가 서브프로세스 및 RAM 소모 없음).
 
 ### 스위치 (Switches)
 - **리모트 제어 데몬** (`remote_control`): `agy remote-control` 데몬을 켜고 끌 수 있습니다. 에이전트가 추론 중이거나 파일 작업 중일 때는 안전을 위해 **끄기 락(Lock)**이 작동하여 스위치 끄기가 방지됩니다.

@@ -75,8 +75,14 @@
       "gemini_quota": {
         "name": "Gemini 주간 잔여량"
       },
+      "gemini_5h_quota": {
+        "name": "Gemini 5시간 잔여량"
+      },
       "claude_quota": {
         "name": "Claude 주간 잔여량"
+      },
+      "claude_5h_quota": {
+        "name": "Claude 5시간 잔여량"
       }
     },
     "binary_sensor": {

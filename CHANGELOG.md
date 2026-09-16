@@ -12,7 +12,9 @@ All notable changes to the `antigravity_cli` Home Assistant integration will be 
   - 애드온 백엔드의 `GET /api/options` 및 `POST /api/options`와 실시간 연동
 - **AI 모델 잔여 쿼터 센서 (RAM 점유 0% 무부하 보장)**:
   - `sensor.antigravity_cli_gemini_quota`: Gemini 주간 쿼터 잔여율 (%)
+  - `sensor.antigravity_cli_gemini_5h_quota`: Gemini 5시간 윈도우 쿼터 잔여율 (%)
   - `sensor.antigravity_cli_claude_quota`: Claude 주간 쿼터 잔여율 (%)
+  - `sensor.antigravity_cli_claude_5h_quota`: Claude 5시간 윈도우 쿼터 잔여율 (%)
   - `agy` 서브프로세스를 정기 폴링하지 않고 워밍업된 메모리 캐시만 즉시 참조하여 추가 메모리 소모 0% 보장
 - **커스텀 챗 서비스 (`antigravity_cli.chat`) 신설**:
   - 자동화 및 스크립트에서 모드(`hybrid`/`llm_mcp`/`fast_local`), 대화 ID(`chat_id`), 모델(`model`)을 지정하여 챗을 실행하고 생성된 응답(`response`, `conversation_id`, `success`)을 직접 반환받을 수 있는 서비스 등록
