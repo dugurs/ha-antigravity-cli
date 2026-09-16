@@ -64,9 +64,11 @@ async def test_setup_and_unload_entry(hass: HomeAssistant) -> None:
         assert DOMAIN in hass.data
         assert entry.entry_id in hass.data[DOMAIN]
         assert mock_forward.called
+        assert hass.services.has_service(DOMAIN, "chat")
 
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
 
         assert entry.entry_id not in hass.data[DOMAIN]
         assert mock_unload.called
+        assert not hass.services.has_service(DOMAIN, "chat")

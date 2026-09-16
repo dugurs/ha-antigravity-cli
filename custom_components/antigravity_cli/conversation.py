@@ -37,9 +37,7 @@ from .entity import AntigravityEntity
 _LOGGER = logging.getLogger(__name__)
 
 # Direct LLM triggers (skip local matching when detected)
-LLM_PREFIXES = [
-    "/llm", "!llm", "/ai", "/agy", "ai ", "agy ", "질문:", "질문 ", "물어봐 "
-]
+LLM_PREFIXES = ["/llm", "!llm", "/ai", "/agy", "ai ", "agy ", "질문:", "질문 ", "물어봐 "]
 
 ROOMS = ["거실", "안방", "작은방", "옷방", "주방", "화장실", "세탁실", "현관", "베란다"]
 
@@ -49,17 +47,48 @@ ROOMS = ["거실", "안방", "작은방", "옷방", "주방", "화장실", "세�
 # entity; a bathroom fan might be fan/climate/switch), so resolution below
 # scores every domain in the tuple instead of assuming just one.
 DEVICE_CATEGORIES: dict[str, dict[str, Any]] = {
-    "light": {"suffixes": ["전등", "조명", "램프", "불빛", "등", "불", "light"], "domains": ("light",)},
-    "fan": {"suffixes": ["선풍기", "환풍기", "서큘레이터", "써큘레이터", "실링팬", "환기", "팬", "fan"], "domains": ("fan", "climate", "switch")},
-    "cover": {"suffixes": ["블라인더", "블라인드", "커텐", "커탠", "커튼", "암막", "창문", "셔터", "도어", "cover", "blind", "curtain"], "domains": ("cover",)},
-    "climate": {"suffixes": ["에어컨", "에어콘", "냉방", "난방", "ac", "climate"], "domains": ("climate", "switch")},
+    "light": {
+        "suffixes": ["전등", "조명", "램프", "불빛", "등", "불", "light"],
+        "domains": ("light",),
+    },
+    "fan": {
+        "suffixes": ["선풍기", "환풍기", "서큘레이터", "써큘레이터", "실링팬", "환기", "팬", "fan"],
+        "domains": ("fan", "climate", "switch"),
+    },
+    "cover": {
+        "suffixes": [
+            "블라인더",
+            "블라인드",
+            "커텐",
+            "커탠",
+            "커튼",
+            "암막",
+            "창문",
+            "셔터",
+            "도어",
+            "cover",
+            "blind",
+            "curtain",
+        ],
+        "domains": ("cover",),
+    },
+    "climate": {
+        "suffixes": ["에어컨", "에어콘", "냉방", "난방", "ac", "climate"],
+        "domains": ("climate", "switch"),
+    },
     "humidifier": {"suffixes": ["가습기", "제습기"], "domains": ("humidifier", "switch")},
     # Turning one of these OFF always goes through the confirmation gate
     # below (see _execute_domain_control) -- boiler/heater/outlet mishaps
     # have real consequences, unlike a light or fan.
-    "appliance": {"suffixes": ["보일러", "히터", "온열기", "전기스토브", "콘센트", "플러그"], "domains": ("switch", "climate")},
+    "appliance": {
+        "suffixes": ["보일러", "히터", "온열기", "전기스토브", "콘센트", "플러그"],
+        "domains": ("switch", "climate"),
+    },
     "switch": {"suffixes": ["스위치", "switch"], "domains": ("switch",)},
-    "media_player": {"suffixes": ["미디어플레이어", "티비", "tv", "스피커", "오디오", "음악", "speaker"], "domains": ("media_player",)},
+    "media_player": {
+        "suffixes": ["미디어플레이어", "티비", "tv", "스피커", "오디오", "음악", "speaker"],
+        "domains": ("media_player",),
+    },
 }
 
 _WHOLE_HOUSE_WORDS = ("전체", "다", "모두", "모든")
@@ -68,7 +97,18 @@ _WHOLE_HOUSE_WORDS = ("전체", "다", "모두", "모든")
 # diagnostic/helper entities (update/button/number/select/sensor), which
 # routinely share the exact same friendly_name as the actual controllable
 # entity (e.g. update.dress_plug and switch.dress_plug both "옷방 플러그").
-_CONTROLLABLE_DOMAINS = ("light", "switch", "cover", "fan", "climate", "media_player", "humidifier", "automation", "scene", "script")
+_CONTROLLABLE_DOMAINS = (
+    "light",
+    "switch",
+    "cover",
+    "fan",
+    "climate",
+    "media_player",
+    "humidifier",
+    "automation",
+    "scene",
+    "script",
+)
 
 _AFFIRMATIVE_WORDS = ("응", "네", "예", "그래", "오케이", "ok", "yes")
 _NEGATIVE_WORDS = ("아니", "아니오", "아니요", "no", "취소")
@@ -83,33 +123,90 @@ _COMPOUND_CONNECTORS = ["하고", "이랑", "랑", "그리고", ","]
 # Action keywords
 ACTIONS = {
     "turn_on": [
-        "켜줘", "켜라", "켜줄래", "켜", "틀어줘", "틀어", "돌려줘", "돌려",
-        "작동해줘", "작동해", "시작해줘", "시작", "실행해줘", "실행",
-        "on", "turn on", "start",
+        "켜줘",
+        "켜라",
+        "켜줄래",
+        "켜",
+        "틀어줘",
+        "틀어",
+        "돌려줘",
+        "돌려",
+        "작동해줘",
+        "작동해",
+        "시작해줘",
+        "시작",
+        "실행해줘",
+        "실행",
+        "on",
+        "turn on",
+        "start",
     ],
     "turn_off": [
-        "꺼줘", "꺼라", "꺼줄래", "꺼", "꺼달라", "끄고", "종료해줘", "종료",
-        "중지해줘", "중지", "멈춰줘", "멈춰", "정지", "off", "turn off", "stop",
+        "꺼줘",
+        "꺼라",
+        "꺼줄래",
+        "꺼",
+        "꺼달라",
+        "끄고",
+        "종료해줘",
+        "종료",
+        "중지해줘",
+        "중지",
+        "멈춰줘",
+        "멈춰",
+        "정지",
+        "off",
+        "turn off",
+        "stop",
     ],
     "toggle": [
-        "토글해줘", "토글", "반전해줘", "반전", "toggle",
+        "토글해줘",
+        "토글",
+        "반전해줘",
+        "반전",
+        "toggle",
     ],
     "open_cover": [
-        "열어줘", "열어라", "열어줄래", "열어", "올려줘", "올려라", "올려",
-        "개방해줘", "개방", "open",
+        "열어줘",
+        "열어라",
+        "열어줄래",
+        "열어",
+        "올려줘",
+        "올려라",
+        "올려",
+        "개방해줘",
+        "개방",
+        "open",
     ],
     "close_cover": [
-        "닫아줘", "닫아라", "닫아줄래", "닫아", "내려줘", "내려라", "내려",
-        "폐쇄해줘", "close",
+        "닫아줘",
+        "닫아라",
+        "닫아줄래",
+        "닫아",
+        "내려줘",
+        "내려라",
+        "내려",
+        "폐쇄해줘",
+        "close",
     ],
     "stop_cover": [
-        "멈춰줘", "멈춰라", "멈춰", "정지해줘", "정지",
+        "멈춰줘",
+        "멈춰라",
+        "멈춰",
+        "정지해줘",
+        "정지",
     ],
     "media_play": [
-        "재생해줘", "재생", "플레이해줘", "플레이", "play",
+        "재생해줘",
+        "재생",
+        "플레이해줘",
+        "플레이",
+        "play",
     ],
     "media_pause": [
-        "일시정지해줘", "일시정지", "pause",
+        "일시정지해줘",
+        "일시정지",
+        "pause",
     ],
 }
 
@@ -164,6 +261,7 @@ class ConversationSession:
     turns during an addon outage: a bare follow-up ("그거 꺼"), a pending
     dangerous-appliance confirmation, or a remembered room for "습도는?".
     """
+
     topic: str | None = None
     last_entity_id: str | None = None
     last_room: str | None = None
@@ -211,7 +309,20 @@ def collapse_domain_suffixes(text: str) -> tuple[str, str | None]:
 def _strip_setting_words(text: str) -> str:
     """Remove trailing "맞춰줘"/"설정"/particle fragments left after pulling
     a number (temperature or percentage) out of a control phrase."""
-    for w in ["으로맞춰줘", "으로맞춰", "으로설정해줘", "으로설정", "으로해줘", "맞춰줘", "맞춰", "설정해줘", "설정", "해줘", "으로", "로"]:
+    for w in [
+        "으로맞춰줘",
+        "으로맞춰",
+        "으로설정해줘",
+        "으로설정",
+        "으로해줘",
+        "맞춰줘",
+        "맞춰",
+        "설정해줘",
+        "설정",
+        "해줘",
+        "으로",
+        "로",
+    ]:
         text = text.replace(w, "")
     return text
 
@@ -227,7 +338,7 @@ def _split_compound_target(raw_target: str) -> list[str]:
         idx = raw_target.find(conn)
         if idx > 0:
             left = raw_target[:idx].strip()
-            right = raw_target[idx + len(conn):].strip()
+            right = raw_target[idx + len(conn) :].strip()
             if left and right:
                 left_flat = left.replace(" ", "")
                 right_flat = right.replace(" ", "")
@@ -247,7 +358,18 @@ _DELAY_PHRASE_RE = re.compile(r"\d+\s*(?:초|분|시간)\s*(?:뒤|후|있다가|
 # "예약 실행 목록 보여줘" (list pending scheduled commands) is a QUESTION, but
 # the keyword check below isn't anchored to the end of the sentence, so this
 # guard keeps such questions from being treated as a control command.
-_SCHEDULE_QUERY_WORDS = ("목록", "리스트", "몇개", "몇 개", "개수", "뭐있", "뭐 있", "보여줘", "알려줘", "확인")
+_SCHEDULE_QUERY_WORDS = (
+    "목록",
+    "리스트",
+    "몇개",
+    "몇 개",
+    "개수",
+    "뭐있",
+    "뭐 있",
+    "보여줘",
+    "알려줘",
+    "확인",
+)
 
 
 def _is_schedule_query(text: str) -> bool:
@@ -275,14 +397,36 @@ def _service_for_action(domain: str, action: str) -> tuple[str | None, str | Non
     if action == "turn_on":
         if domain == "cover":
             return "cover", "open_cover", "열었습니다"
-        if domain in ("scene", "script", "light", "switch", "fan", "climate", "media_player", "automation", "humidifier"):
-            verb = "켰습니다" if domain in ("light", "switch", "fan", "climate", "media_player", "humidifier") else "실행했습니다"
+        if domain in (
+            "scene",
+            "script",
+            "light",
+            "switch",
+            "fan",
+            "climate",
+            "media_player",
+            "automation",
+            "humidifier",
+        ):
+            verb = (
+                "켰습니다"
+                if domain in ("light", "switch", "fan", "climate", "media_player", "humidifier")
+                else "실행했습니다"
+            )
             return domain, "turn_on", verb
         return "homeassistant", "turn_on", "켰습니다"
     if action == "turn_off":
         if domain == "cover":
             return "cover", "close_cover", "닫았습니다"
-        if domain in ("light", "switch", "fan", "climate", "media_player", "automation", "humidifier"):
+        if domain in (
+            "light",
+            "switch",
+            "fan",
+            "climate",
+            "media_player",
+            "automation",
+            "humidifier",
+        ):
             return domain, "turn_off", "껐습니다"
         return "homeassistant", "turn_off", "껐습니다"
     if action == "open_cover":
@@ -318,7 +462,7 @@ def _parse_sse_chat_response(raw_text: str) -> tuple[str | None, str | None]:
         if not block.startswith("data:"):
             continue
         try:
-            event = json.loads(block[len("data:"):].strip())
+            event = json.loads(block[len("data:") :].strip())
         except (json.JSONDecodeError, ValueError):
             continue
         event_type = event.get("type")
@@ -338,9 +482,14 @@ def parse_control_intent(text: str) -> tuple[str | None, list[tuple[str, str | N
     clean = normalize_phonetics(text.strip())
 
     action_priority = [
-        "open_cover", "close_cover", "stop_cover",
-        "media_play", "media_pause",
-        "turn_off", "turn_on", "toggle",
+        "open_cover",
+        "close_cover",
+        "stop_cover",
+        "media_play",
+        "media_pause",
+        "turn_off",
+        "turn_on",
+        "toggle",
     ]
 
     for action_key in action_priority:
@@ -500,7 +649,10 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
             return top_matches, None
 
         names = [s.attributes.get("friendly_name") or s.entity_id for s in top_matches[:6]]
-        return [], f"어느 것을 말씀하시는 걸까요? ({', '.join(names)} 중 하나로, 또는 '전체'라고 말씀해 주세요.)"
+        return (
+            [],
+            f"어느 것을 말씀하시는 걸까요? ({', '.join(names)} 중 하나로, 또는 '전체'라고 말씀해 주세요.)",
+        )
 
     def _generate_home_summary(self) -> str:
         """Dynamically generate a comprehensive smart home status summary."""
@@ -523,9 +675,17 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
             if s.domain == "sensor":
                 dc = s.attributes.get("device_class")
                 fn = s.attributes.get("friendly_name") or ""
-                if (dc == "temperature" or "온도" in fn) and not temp_val and s.state not in ("unavailable", "unknown"):
+                if (
+                    (dc == "temperature" or "온도" in fn)
+                    and not temp_val
+                    and s.state not in ("unavailable", "unknown")
+                ):
                     temp_val = f"{s.state}{s.attributes.get('unit_of_measurement', '°C')}"
-                if (dc == "humidity" or "습도" in fn) and not hum_val and s.state not in ("unavailable", "unknown"):
+                if (
+                    (dc == "humidity" or "습도" in fn)
+                    and not hum_val
+                    and s.state not in ("unavailable", "unknown")
+                ):
                     hum_val = f"{s.state}{s.attributes.get('unit_of_measurement', '%')}"
 
         env_text = f"실내 온도 {temp_val or '29°C'}, 습도 {hum_val or '67%'}"
@@ -550,7 +710,9 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
             appliance_parts.append("세탁기 작동 중")
         if dryer and dryer.state == "on":
             appliance_parts.append("건조기 작동 중")
-        appliance_text = ", ".join(appliance_parts) if appliance_parts else "가전 대기 중 (세탁/건조 완료)"
+        appliance_text = (
+            ", ".join(appliance_parts) if appliance_parts else "가전 대기 중 (세탁/건조 완료)"
+        )
 
         return (
             f"현재 우리집 상태 요약입니다.\n"
@@ -618,12 +780,33 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
                 if val in ("unavailable", "unknown", None):
                     continue
 
-                if any(ex in fn for ex in ["플러그", "버튼", "스위치", "재실", "도어", "창문", "문", "배터리", "세탁기", "건조기", "장치"]):
+                if any(
+                    ex in fn
+                    for ex in [
+                        "플러그",
+                        "버튼",
+                        "스위치",
+                        "재실",
+                        "도어",
+                        "창문",
+                        "문",
+                        "배터리",
+                        "세탁기",
+                        "건조기",
+                        "장치",
+                    ]
+                ):
                     continue
 
                 match_env = False
                 if is_temp:
-                    if dc == "temperature" or ("온도" in fn and "습도" not in fn and "설정" not in fn and "최고" not in fn and "최저" not in fn):
+                    if dc == "temperature" or (
+                        "온도" in fn
+                        and "습도" not in fn
+                        and "설정" not in fn
+                        and "최고" not in fn
+                        and "최저" not in fn
+                    ):
                         match_env = True
                 else:
                     if dc == "humidity" or ("습도" in fn and "온도" not in fn):
@@ -655,14 +838,21 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
                 try:
                     with open(p, encoding="utf-8", errors="ignore") as f:
                         lines = f.readlines()
-                    errors = [line_entry.strip() for line_entry in lines if " ERROR " in line_entry or " CRITICAL " in line_entry]
+                    errors = [
+                        line_entry.strip()
+                        for line_entry in lines
+                        if " ERROR " in line_entry or " CRITICAL " in line_entry
+                    ]
                     if errors:
                         recent = errors[-3:]
                         formatted = []
                         for e in recent:
                             parts = e.split(" ERROR ", 1)
                             formatted.append(parts[1] if len(parts) > 1 else e)
-                        return f"현재 Home Assistant 시스템 에러 로그 요약입니다:\n• 최근 에러 {len(formatted)}건:\n  - " + "\n  - ".join(formatted)
+                        return (
+                            f"현재 Home Assistant 시스템 에러 로그 요약입니다:\n• 최근 에러 {len(formatted)}건:\n  - "
+                            + "\n  - ".join(formatted)
+                        )
                     return "현재 Home Assistant 시스템에 기록된 에러가 없습니다. (정상 동작 중)"
                 except Exception:
                     pass
@@ -678,7 +868,18 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
         clean = normalize_phonetics(text.strip().replace(" ", "").lower())
 
         # System Error Logs Query (에러 로그, 시스템 로그, 오류 확인)
-        if any(w in clean for w in ["에러로그", "오류로그", "에러확인", "오류확인", "시스템로그", "최근에러", "로그확인"]):
+        if any(
+            w in clean
+            for w in [
+                "에러로그",
+                "오류로그",
+                "에러확인",
+                "오류확인",
+                "시스템로그",
+                "최근에러",
+                "로그확인",
+            ]
+        ):
             session.topic = "system"
             return self._generate_error_logs_summary()
 
@@ -695,26 +896,55 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
                 return self._generate_room_lights_summary()
 
         # 1. Broad Home Status / Situation / Summary Intent
-        if any(w in clean for w in ["상태", "상황", "현황", "요약", "브리핑", "분위기", "어때", "어떠", "어떻", "집안", "우리집", "모습"]):
-            if not any(ctrl in clean for ctrl in ["켜", "꺼", "틀어", "시작", "정지", "닫아", "열어", "작동", "돌려"]):
+        if any(
+            w in clean
+            for w in [
+                "상태",
+                "상황",
+                "현황",
+                "요약",
+                "브리핑",
+                "분위기",
+                "어때",
+                "어떠",
+                "어떻",
+                "집안",
+                "우리집",
+                "모습",
+            ]
+        ):
+            if not any(
+                ctrl in clean
+                for ctrl in ["켜", "꺼", "틀어", "시작", "정지", "닫아", "열어", "작동", "돌려"]
+            ):
                 session.topic = "summary"
                 return self._generate_home_summary()
 
         # 2. Batch Light Control (불 다 꺼, 모든 조명 꺼, 집안 불 끄기)
-        if any(w in clean for w in ["불다꺼", "조명다꺼", "전등다꺼", "모든불꺼", "모든조명꺼", "다꺼", "전체꺼"]):
+        if any(
+            w in clean
+            for w in ["불다꺼", "조명다꺼", "전등다꺼", "모든불꺼", "모든조명꺼", "다꺼", "전체꺼"]
+        ):
             on_lights = [
-                s.entity_id for s in self.hass.states.async_all()
+                s.entity_id
+                for s in self.hass.states.async_all()
                 if s.domain == "light" and s.state == "on"
             ]
             if on_lights:
-                await self.hass.services.async_call("light", "turn_off", {"entity_id": on_lights}, blocking=True)
+                await self.hass.services.async_call(
+                    "light", "turn_off", {"entity_id": on_lights}, blocking=True
+                )
                 session.topic = "device"
                 return f"켜져 있던 {len(on_lights)}개의 조명을 모두 껐습니다."
             else:
                 return "현재 켜져 있는 조명이 없습니다."
 
-        if any(w in clean for w in ["불다켜", "조명다켜", "모든불켜", "모든조명켜", "다켜", "전체켜"]):
-            await self.hass.services.async_call("light", "turn_on", {"entity_id": "all"}, blocking=True)
+        if any(
+            w in clean for w in ["불다켜", "조명다켜", "모든불켜", "모든조명켜", "다켜", "전체켜"]
+        ):
+            await self.hass.services.async_call(
+                "light", "turn_on", {"entity_id": "all"}, blocking=True
+            )
             session.topic = "device"
             return "집안의 모든 조명을 켰습니다."
 
@@ -723,9 +953,16 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
             session.topic = "mode"
             for domain, s_id in [("script", "outing_mode"), ("automation", "oeculmodeu_silhaeng")]:
                 if self.hass.states.get(f"{domain}.{s_id}"):
-                    await self.hass.services.async_call(domain, "turn_on" if domain == "script" else "trigger", {"entity_id": f"{domain}.{s_id}"}, blocking=True)
+                    await self.hass.services.async_call(
+                        domain,
+                        "turn_on" if domain == "script" else "trigger",
+                        {"entity_id": f"{domain}.{s_id}"},
+                        blocking=True,
+                    )
                     return "외출 모드를 실행했습니다. 안전하게 다녀오세요!"
-            await self.hass.services.async_call("light", "turn_off", {"entity_id": "all"}, blocking=True)
+            await self.hass.services.async_call(
+                "light", "turn_off", {"entity_id": "all"}, blocking=True
+            )
             return "외출 모드로 전환하여 조명을 모두 껐습니다."
 
         # 4. Sleep Mode (잘 자, 취침 모드, 수면 모드, 잘자)
@@ -733,7 +970,9 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
             session.topic = "mode"
             for domain, s_id in [("script", "sub_sleep_mode")]:
                 if self.hass.states.get(f"{domain}.{s_id}"):
-                    await self.hass.services.async_call(domain, "turn_on", {"entity_id": f"{domain}.{s_id}"}, blocking=True)
+                    await self.hass.services.async_call(
+                        domain, "turn_on", {"entity_id": f"{domain}.{s_id}"}, blocking=True
+                    )
                     return "취침 모드를 실행했습니다. 안녕히 주무세요!"
             return "취침 모드를 실행했습니다. 편안한 밤 되세요!"
 
@@ -743,17 +982,23 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
             if any(w in clean for w in ["틀어", "켜", "재생", "플레이", "start", "on"]):
                 for s_id in ["automation.radio_jaesaeng", "automation.radio_jaesaeng2"]:
                     if self.hass.states.get(s_id):
-                        await self.hass.services.async_call("automation", "trigger", {"entity_id": s_id}, blocking=True)
+                        await self.hass.services.async_call(
+                            "automation", "trigger", {"entity_id": s_id}, blocking=True
+                        )
                         return "라디오를 재생합니다."
             elif any(w in clean for w in ["꺼", "멈춰", "중지", "그만", "off", "stop"]):
                 for s in self.hass.states.async_all():
                     if s.domain == "media_player" and s.state in ("playing", "paused"):
-                        await self.hass.services.async_call("media_player", "media_stop", {"entity_id": s.entity_id}, blocking=True)
+                        await self.hass.services.async_call(
+                            "media_player", "media_stop", {"entity_id": s.entity_id}, blocking=True
+                        )
                 return "라디오 재생을 중지했습니다."
 
         return None
 
-    async def _handle_percent_or_temperature(self, text: str, session: ConversationSession) -> str | None:
+    async def _handle_percent_or_temperature(
+        self, text: str, session: ConversationSession
+    ) -> str | None:
         """Number-bearing settings that carry no on/off verb at all
         ("26도로 맞춰줘", "50%로 해줘") -- checked before the verb-keyword
         gate below, same as the addon's own ordering, and routed through
@@ -763,7 +1008,9 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
         clean = normalize_phonetics(text.strip().replace(" ", "").lower())
 
         temp_match = _TEMPERATURE_RE.search(text)
-        if temp_match and any(w in clean for w in ["에어컨", "에어콘", "난방", "냉방", "온도", "맞춰", "설정"]):
+        if temp_match and any(
+            w in clean for w in ["에어컨", "에어콘", "난방", "냉방", "온도", "맞춰", "설정"]
+        ):
             target_temp = float(temp_match.group(1))
             stripped = _strip_setting_words(clean.replace(f"{temp_match.group(1)}도", ""))
             target_base, _ = collapse_domain_suffixes(stripped)
@@ -774,7 +1021,10 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
                 return None
             for t in targets:
                 await self.hass.services.async_call(
-                    "climate", "set_temperature", {"entity_id": t.entity_id, "temperature": target_temp}, blocking=True
+                    "climate",
+                    "set_temperature",
+                    {"entity_id": t.entity_id, "temperature": target_temp},
+                    blocking=True,
                 )
                 session.last_entity_id = t.entity_id
             names = [t.attributes.get("friendly_name") or t.entity_id for t in targets]
@@ -787,7 +1037,9 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
             if is_fan or is_light:
                 pct = int(pct_match.group(1))
                 category = "fan" if is_fan else "light"
-                stripped = _strip_setting_words(clean[: pct_match.start()] + clean[pct_match.end():])
+                stripped = _strip_setting_words(
+                    clean[: pct_match.start()] + clean[pct_match.end() :]
+                )
                 target_base, _ = collapse_domain_suffixes(stripped)
                 targets, err = self._resolve_target(target_base, category, "turn_on")
                 if err:
@@ -797,11 +1049,17 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
                 for t in targets:
                     if t.domain == "fan":
                         await self.hass.services.async_call(
-                            "fan", "set_percentage", {"entity_id": t.entity_id, "percentage": pct}, blocking=True
+                            "fan",
+                            "set_percentage",
+                            {"entity_id": t.entity_id, "percentage": pct},
+                            blocking=True,
                         )
                     else:
                         await self.hass.services.async_call(
-                            "light", "turn_on", {"entity_id": t.entity_id, "brightness_pct": pct}, blocking=True
+                            "light",
+                            "turn_on",
+                            {"entity_id": t.entity_id, "brightness_pct": pct},
+                            blocking=True,
                         )
                     session.last_entity_id = t.entity_id
                 names = [t.attributes.get("friendly_name") or t.entity_id for t in targets]
@@ -816,7 +1074,10 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
         all_states = self.hass.states.async_all()
 
         # Sensory Query 1: 더위 / 폭염 ("오늘 더워?", "더워?", "덥나", "더울까", "에어컨 틀까")
-        if any(w in clean for w in ["더워", "덥나", "덥냐", "더운가", "더울까", "더운", "폭염", "열대야"]):
+        if any(
+            w in clean
+            for w in ["더워", "덥나", "덥냐", "더운가", "더울까", "더운", "폭염", "열대야"]
+        ):
             session.topic = "weather"
             briefing = self.hass.states.get("sensor.wn_sinweoldong_weather_briefing")
             if briefing and briefing.state not in ("unavailable", "unknown"):
@@ -843,20 +1104,33 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
                     return f"현재 미세먼지 수치는 {s.state}{s.attributes.get('unit_of_measurement', '')} 입니다."
 
         # Sensory Query 4: Open doors / windows ("문 열린 곳 있어?", "창문 열린 곳 있어?")
-        if any(w in clean for w in ["문열린", "문 열린", "창문열린", "창문 열린", "열린문", "열린 문"]):
+        if any(
+            w in clean for w in ["문열린", "문 열린", "창문열린", "창문 열린", "열린문", "열린 문"]
+        ):
             open_sensors = []
             for s in all_states:
                 if s.domain == "binary_sensor":
                     dc = s.attributes.get("device_class")
                     fn = s.attributes.get("friendly_name") or s.entity_id
-                    if (dc in ("door", "window", "opening") or any(k in fn for k in ["문", "창문"])) and s.state == "on":
+                    if (
+                        dc in ("door", "window", "opening") or any(k in fn for k in ["문", "창문"])
+                    ) and s.state == "on":
                         open_sensors.append(fn)
             if open_sensors:
                 return f"현재 열려 있는 곳은 {', '.join(open_sensors)} 입니다."
             return "현재 모든 문과 창문이 닫혀 있습니다."
 
         # Contextual Follow-up 1: "내일은?", "내일 날씨"
-        is_followup_tomorrow = clean_no_space in ("내일은", "내일은?", "내일날씨", "내일날씨는", "내일날씨는?", "내일도비와", "내일도비와?", "내일도비오나") or (session.topic == "weather" and "내일" in clean)
+        is_followup_tomorrow = clean_no_space in (
+            "내일은",
+            "내일은?",
+            "내일날씨",
+            "내일날씨는",
+            "내일날씨는?",
+            "내일도비와",
+            "내일도비와?",
+            "내일도비오나",
+        ) or (session.topic == "weather" and "내일" in clean)
         if is_followup_tomorrow:
             session.topic = "weather"
             next_day_sensor = self.hass.states.get("sensor.wn_sinweoldong_next_day_short_comment")
@@ -878,7 +1152,9 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
             for state in all_states:
                 eid = state.entity_id.lower()
                 fn = state.attributes.get("friendly_name") or ""
-                if ("weather_briefing" in eid or "날씨 보고" in fn or "날씨보고" in fn) and state.state not in ("unavailable", "unknown"):
+                if (
+                    "weather_briefing" in eid or "날씨 보고" in fn or "날씨보고" in fn
+                ) and state.state not in ("unavailable", "unknown"):
                     return state.state
 
             for state in all_states:
@@ -916,7 +1192,18 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
 
         # Memory / Resource Query (애드온 메모리, 램, 리소스, cpu)
         if any(w in clean for w in ["메모리", "램", "ram", "리소스", "cpu", "사양"]):
-            if any(w in clean for w in ["애드온별", "애드온 별", "각 애드온", "모든 애드온", "애드온 목록", "앱별", "애드온들"]):
+            if any(
+                w in clean
+                for w in [
+                    "애드온별",
+                    "애드온 별",
+                    "각 애드온",
+                    "모든 애드온",
+                    "애드온 목록",
+                    "앱별",
+                    "애드온들",
+                ]
+            ):
                 return None  # Dispatch to addon /api/chat for full Supervisor per-addon breakdown!
             session.topic = "system"
             coord_data = self.coordinator.data or {}
@@ -944,7 +1231,11 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
                     pass
 
             if total_gb > 0:
-                addon_info = f"Antigravity CLI 애드온 메모리는 약 {addon_mem}MB 이며, " if addon_mem > 0 else ""
+                addon_info = (
+                    f"Antigravity CLI 애드온 메모리는 약 {addon_mem}MB 이며, "
+                    if addon_mem > 0
+                    else ""
+                )
                 return f"현재 {addon_info}시스템 전체 메모리는 {used_gb}GB / {total_gb}GB ({pct}%) 사용 중입니다."
 
             for s in all_states:
@@ -955,7 +1246,9 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
 
         # Humidity query
         if "습도" in clean:
-            target_room, _ = collapse_domain_suffixes(clean.replace("습도", "").replace("어때", "").replace("몇", ""))
+            target_room, _ = collapse_domain_suffixes(
+                clean.replace("습도", "").replace("어때", "").replace("몇", "")
+            )
             if not target_room and session.last_room:
                 target_room = session.last_room
 
@@ -978,7 +1271,9 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
 
         # Temperature query
         if any(w in clean for w in ["온도", "몇 도", "몇도", "기온", "temperature"]):
-            target_room, _ = collapse_domain_suffixes(clean.replace("온도", "").replace("몇도", "").replace("몇 도", ""))
+            target_room, _ = collapse_domain_suffixes(
+                clean.replace("온도", "").replace("몇도", "").replace("몇 도", "")
+            )
             if not target_room and session.last_room:
                 target_room = session.last_room
 
@@ -1006,7 +1301,10 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
             session.topic = "sensor"
             for state in all_states:
                 fn = state.attributes.get("friendly_name") or ""
-                if any(w in fn for w in ["미세먼지", "대기", "공기질"]) and state.state not in ("unavailable", "unknown"):
+                if any(w in fn for w in ["미세먼지", "대기", "공기질"]) and state.state not in (
+                    "unavailable",
+                    "unknown",
+                ):
                     unit = state.attributes.get("unit_of_measurement") or ""
                     return f"{fn} 상태는 {state.state}{unit} 입니다."
 
@@ -1071,25 +1369,43 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
                     break
 
             if entity_category == "appliance" and real_action == "turn_off":
-                to_confirm.append({"domain": service_domain, "service": service, "entity_id": entity_id, "name": friendly_name})
+                to_confirm.append(
+                    {
+                        "domain": service_domain,
+                        "service": service,
+                        "entity_id": entity_id,
+                        "name": friendly_name,
+                    }
+                )
                 continue
 
             try:
-                await self.hass.services.async_call(service_domain, service, {"entity_id": entity_id}, blocking=True)
+                await self.hass.services.async_call(
+                    service_domain, service, {"entity_id": entity_id}, blocking=True
+                )
                 messages.append(f"{friendly_name}을(를) {speech_verb}.")
             except Exception as ex:
-                _LOGGER.error("Local fallback failed to execute %s.%s on %s: %s", service_domain, service, entity_id, ex)
+                _LOGGER.error(
+                    "Local fallback failed to execute %s.%s on %s: %s",
+                    service_domain,
+                    service,
+                    entity_id,
+                    ex,
+                )
                 continue
 
         if to_confirm:
             session.pending_confirm = {
-                "calls": [{"domain": c["domain"], "service": c["service"], "entity_id": c["entity_id"]} for c in to_confirm],
+                "calls": [
+                    {"domain": c["domain"], "service": c["service"], "entity_id": c["entity_id"]}
+                    for c in to_confirm
+                ],
                 "names": [c["name"] for c in to_confirm],
             }
             names = [c["name"] for c in to_confirm]
             messages.append(
                 f"⚠️ {', '.join(names)}을(를) 정말 끄시겠어요? "
-                f"끄면 불편이 생길 수 있는 기기입니다. 계속하시려면 \"응\"이라고 답해주세요."
+                f'끄면 불편이 생길 수 있는 기기입니다. 계속하시려면 "응"이라고 답해주세요.'
             )
 
         return "\n".join(messages) if messages else None
@@ -1108,7 +1424,12 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
             session.pending_confirm = None
             if any(clean == w or clean.startswith(w) for w in _AFFIRMATIVE_WORDS):
                 for call in pending["calls"]:
-                    await self.hass.services.async_call(call["domain"], call["service"], {"entity_id": call["entity_id"]}, blocking=True)
+                    await self.hass.services.async_call(
+                        call["domain"],
+                        call["service"],
+                        {"entity_id": call["entity_id"]},
+                        blocking=True,
+                    )
                 names = pending["names"]
                 return f"확인했습니다 -- {', '.join(names)}을(를) 껐습니다."
             if any(clean == w or clean.startswith(w) for w in _NEGATIVE_WORDS):
@@ -1153,7 +1474,7 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
         for prefix in LLM_PREFIXES:
             if raw_text.lower().startswith(prefix.lower()):
                 force_llm = True
-                target_prompt = raw_text[len(prefix):].strip()
+                target_prompt = raw_text[len(prefix) :].strip()
                 break
 
         http_session = async_get_clientsession(self.hass)
@@ -1181,7 +1502,9 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
                         if response.status == 200:
                             raw_body = await response.text()
                             response_text, conv_id = _parse_sse_chat_response(raw_body)
-                            intent_response.async_set_speech(response_text or "답변을 생성할 수 없습니다.")
+                            intent_response.async_set_speech(
+                                response_text or "답변을 생성할 수 없습니다."
+                            )
                             return ConversationResult(
                                 response=intent_response,
                                 conversation_id=conv_id or user_input.conversation_id,
@@ -1200,11 +1523,17 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
                 continue
 
         # Addon unreachable on every host this turn -- second line of defense.
-        _LOGGER.warning("Antigravity CLI addon unreachable (%s) -- falling back to local processing for: %s", last_error, target_prompt)
+        _LOGGER.warning(
+            "Antigravity CLI addon unreachable (%s) -- falling back to local processing for: %s",
+            last_error,
+            target_prompt,
+        )
         session = self._get_or_create_session(user_input.conversation_id)
         local_speech = await self._handle_local_fallback(target_prompt, session)
         if not local_speech:
-            local_speech = self._handle_info_query(target_prompt, session) or self._generate_home_summary()
+            local_speech = (
+                self._handle_info_query(target_prompt, session) or self._generate_home_summary()
+            )
         intent_response.async_set_speech(f"⚠️ (애드온 응답 없음, 로컬로 처리) {local_speech}")
         return ConversationResult(
             response=intent_response,

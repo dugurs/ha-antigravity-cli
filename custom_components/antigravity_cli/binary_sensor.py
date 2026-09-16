@@ -34,8 +34,7 @@ async def async_setup_entry(
     coordinator: AntigravityDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
 
     async_add_entities(
-        AntigravityBinarySensor(coordinator, description)
-        for description in BINARY_SENSOR_TYPES
+        AntigravityBinarySensor(coordinator, description) for description in BINARY_SENSOR_TYPES
     )
 
 

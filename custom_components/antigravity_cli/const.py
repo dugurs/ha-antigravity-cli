@@ -35,5 +35,25 @@ PLATFORMS: Final = [
     "binary_sensor",
     "button",
     "switch",
+    "select",
     "conversation",
 ]
+
+# Addon Options & Chat Modes
+CHAT_MODE_FULL: Final = "full"
+CHAT_MODE_FAST_ONLY: Final = "fast_only"
+CHAT_MODE_MONITORING: Final = "monitoring"
+CHAT_MODES: Final = [
+    CHAT_MODE_FULL,
+    CHAT_MODE_FAST_ONLY,
+    CHAT_MODE_MONITORING,
+]
+
+# Services
+SERVICE_CHAT: Final = "chat"
+ATTR_MESSAGE: Final = "message"
+ATTR_PROMPT: Final = "prompt"
+ATTR_MODE: Final = "mode"
+ATTR_CHAT_ID: Final = "chat_id"
+ATTR_CONVERSATION_ID: Final = "conversation_id"
+ATTR_MODEL: Final = "model"

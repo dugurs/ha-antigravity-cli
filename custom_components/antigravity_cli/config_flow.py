@@ -47,9 +47,7 @@ class AntigravityConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Handle the initial step."""
         errors: dict[str, str] = {}
 
@@ -71,7 +69,9 @@ class AntigravityConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 headers["Authorization"] = f"Bearer {api_key}"
 
             try:
-                async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                async with session.get(
+                    url, headers=headers, timeout=aiohttp.ClientTimeout(total=5)
+                ) as resp:
                     if resp.status == 200:
                         return self.async_create_entry(
                             title=f"{NAME} ({host}:{port})",
@@ -109,9 +109,7 @@ class AntigravityOptionsFlowHandler(config_entries.OptionsFlow):
         """Initialize options flow."""
         self._config_entry = config_entry
 
-    async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Manage the options."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
@@ -131,9 +129,18 @@ class AntigravityOptionsFlowHandler(config_entries.OptionsFlow):
                     ): selector.SelectSelector(
                         selector.SelectSelectorConfig(
                             options=[
-                                selector.SelectOptionDict(value=MODE_HYBRID, label="하이브리드 모드 (빠른 로컬 제어 + AI 어시스턴트)"),
-                                selector.SelectOptionDict(value=MODE_LLM_MCP, label="순수 AI 모드 (Antigravity LLM + ha-mcp 100%)"),
-                                selector.SelectOptionDict(value=MODE_FAST_LOCAL, label="로컬 고속 모드 (로컬 도메인 매칭 전용)"),
+                                selector.SelectOptionDict(
+                                    value=MODE_HYBRID,
+                                    label="하이브리드 모드 (빠른 로컬 제어 + AI 어시스턴트)",
+                                ),
+                                selector.SelectOptionDict(
+                                    value=MODE_LLM_MCP,
+                                    label="순수 AI 모드 (Antigravity LLM + ha-mcp 100%)",
+                                ),
+                                selector.SelectOptionDict(
+                                    value=MODE_FAST_LOCAL,
+                                    label="로컬 고속 모드 (로컬 도메인 매칭 전용)",
+                                ),
                             ],
                             mode=selector.SelectSelectorMode.DROPDOWN,
                         )

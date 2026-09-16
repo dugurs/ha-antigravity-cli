@@ -18,11 +18,24 @@ from .entity import AntigravityEntity
 
 _LOGGER = logging.getLogger(__name__)
 
-SWITCH_TYPES: tuple[SwitchEntityDescription, ...] = (
+DAEMON_SWITCH_TYPES: tuple[SwitchEntityDescription, ...] = (
     SwitchEntityDescription(
         key="remote_control_running",
         translation_key="remote_control",
         icon="mdi:remote",
+    ),
+)
+
+OPTION_SWITCH_TYPES: tuple[SwitchEntityDescription, ...] = (
+    SwitchEntityDescription(
+        key="auto_start_remote_control",
+        translation_key="auto_start_remote_control",
+        icon="mdi:autorenew",
+    ),
+    SwitchEntityDescription(
+        key="enable_terminal",
+        translation_key="enable_terminal",
+        icon="mdi:console",
     ),
 )
 
@@ -35,13 +48,17 @@ async def async_setup_entry(
     """Set up the switch platform."""
     coordinator: AntigravityDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
 
-    async_add_entities(
-        AntigravitySwitch(coordinator, description)
-        for description in SWITCH_TYPES
+    entities: list[SwitchEntity] = [
+        AntigravityDaemonSwitch(coordinator, description) for description in DAEMON_SWITCH_TYPES
+    ]
+    entities.extend(
+        AntigravityOptionSwitch(coordinator, description) for description in OPTION_SWITCH_TYPES
     )
 
+    async_add_entities(entities)
 
-class AntigravitySwitch(AntigravityEntity, SwitchEntity):
+
+class AntigravityDaemonSwitch(AntigravityEntity, SwitchEntity):
     """Antigravity switch entity -- controls the `agy remote-control serve`
     daemon via the addon's REST API (start()/stop() in the addon's
     core/remote_control.py), the same endpoints the addon's own web UI
@@ -135,3 +152,73 @@ class AntigravitySwitch(AntigravityEntity, SwitchEntity):
                 )
 
         await self._async_call("stop")
+
+
+class AntigravityOptionSwitch(AntigravityEntity, SwitchEntity):
+    """Switch entity to control add-on configuration options."""
+
+    entity_description: SwitchEntityDescription
+
+    def __init__(
+        self,
+        coordinator: AntigravityDataUpdateCoordinator,
+        description: SwitchEntityDescription,
+    ) -> None:
+        """Initialize the option switch."""
+        super().__init__(coordinator, description.key)
+        self.entity_description = description
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return true if the option is enabled."""
+        if not self.coordinator.data:
+            return None
+        options = self.coordinator.data.get("options") or {}
+        default_val = True if self.entity_description.key == "enable_terminal" else False
+        return bool(options.get(self.entity_description.key, default_val))
+
+    async def _async_set_option(self, enabled: bool) -> None:
+        """Send option update to /api/options on the add-on."""
+        headers = {"Content-Type": "application/json"}
+        if self.coordinator.api_key:
+            headers["Authorization"] = f"Bearer {self.coordinator.api_key}"
+
+        url = f"http://{self.coordinator.host}:{self.coordinator.port}/api/options"
+        payload = {self.entity_description.key: enabled}
+        try:
+            async with asyncio.timeout(10):
+                async with self.coordinator.session.post(
+                    url, json=payload, headers=headers
+                ) as response:
+                    if response.status != 200:
+                        _LOGGER.error(
+                            "Failed to update Antigravity CLI option %s: HTTP %s",
+                            self.entity_description.key,
+                            response.status,
+                        )
+                        raise HomeAssistantError(
+                            f"Failed to update option {self.entity_description.key}: HTTP {response.status}"
+                        )
+        except (TimeoutError, aiohttp.ClientError) as err:
+            _LOGGER.error(
+                "Connection failed while updating Antigravity CLI option %s: %s",
+                self.entity_description.key,
+                err,
+            )
+            raise HomeAssistantError(
+                f"Connection error updating option {self.entity_description.key}: {err}"
+            ) from err
+
+        await self.coordinator.async_request_refresh()
+
+    async def async_turn_on(self, **kwargs) -> None:
+        """Enable the add-on option."""
+        await self._async_set_option(True)
+
+    async def async_turn_off(self, **kwargs) -> None:
+        """Disable the add-on option."""
+        await self._async_set_option(False)
+
+
+# Backward compatibility alias
+AntigravitySwitch = AntigravityDaemonSwitch

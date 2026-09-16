@@ -58,5 +58,3 @@ async def test_conversation_agent(hass: HomeAssistant) -> None:
     assert isinstance(entity, AntigravityConversationEntity)
     assert entity.supported_features == ConversationEntityFeature.CONTROL
     assert entity.unique_id == f"{entry.entry_id}_assistant"
-
-

@@ -21,7 +21,29 @@ Home Assistant의 기본 음성/텍스트 어시스턴트인 **Assist**를 [`ant
 - 로컬 폴백으로 처리된 응답에는 항상 **"⚠️ (애드온 응답 없음, 로컬로 처리)"** 표시가 붙어서 어느 경로로 답했는지 구분할 수 있습니다.
 
 ### 센서 (Sensors)
-애드온의 `/api/status`를 주기적으로 폴링해(기본 30초) 6개 센서로 노출합니다: 상태(`status`), 활성 세션 수(`active_sessions`), 가동 시간(`uptime`), 메모리 사용량(`memory_usage`), CPU 사용률(`cpu_usage`), 예약된 실행 개수(`scheduled_count` — 예약된 지연 명령 목록이 `scheduled_list` 속성으로 함께 노출됨).
+애드온의 `/api/status`를 주기적으로 폴링해(기본 30초) 센서로 노출합니다:
+- **상태 및 모니터링**: 상태(`status`), 활성 세션 수(`active_sessions`), 가동 시간(`uptime`), 메모리 사용량(`memory_usage`), CPU 사용률(`cpu_usage`), 예약된 실행 개수(`scheduled_count` — 예약된 지연 명령 목록이 `scheduled_list` 속성으로 함께 노출됨).
+- **에이전트 실시간 상태**: 데몬 상태(`daemon_status`), 에이전트 작업 상태(`agent_activity` — 대기 중 / 추론 중 / 파일 작업 중 / 도구 실행 중).
+- **모델 사용량 잔여 쿼터 (메모리 0% 오버헤드 보장)**: `gemini_quota`, `claude_quota` (웹 UI 등에서 워밍업된 캐시 데이터만 직접 참조하여 추가 서브프로세스 및 RAM 소모 없음).
+
+### 스위치 (Switches)
+- **리모트 제어 데몬** (`remote_control`): `agy remote-control` 데몬을 켜고 끌 수 있습니다. 에이전트가 추론 중이거나 파일 작업 중일 때는 안전을 위해 **끄기 락(Lock)**이 작동하여 스위치 끄기가 방지됩니다.
+- **리모트 데몬 자동 시작** (`auto_start_remote_control`): 애드온 시작 시 리모트 데몬 자동 실행 여부를 설정합니다.
+- **웹 터미널** (`enable_terminal`): 웹 터미널 기능 활성화 여부를 설정합니다.
+
+### 선택 (Select)
+- **채팅 작동 모드** (`chat_mode`): 애드온의 대화 처리 모드를 전환합니다.
+  - `full`: 자율 에이전트 전체 기능 활성화
+  - `fast_only`: 로컬 고속 제어 전용 (LLM 비활성화)
+  - `monitoring`: 모니터링 전용 (채팅 요청 차단)
+
+### 서비스 / 액션 (Services / Actions)
+- **`antigravity_cli.chat`**: 스크립트나 자동화에서 모드, chat_id, 모델, 메시지를 지정하여 직접 챗을 수행하고 결과 응답을 반환받을 수 있습니다.
+  - `message`: 보낼 메시지 / 프롬프트
+  - `mode`: 처리 모드 (`hybrid`: 자율 에이전트, `llm_mcp`: LLM 도구 호출, `fast_local`: 로컬 고속 제어)
+  - `chat_id`: 이어갈 세션 ID (선택사항)
+  - `model`: 사용할 모델명 (선택사항, 예: `gemini-2.5-flash`)
+  - 반환값: `response` (답변 텍스트), `conversation_id`, `success`
 
 ### 버튼 (Buttons)
 - **상태 강제 동기화** (`sync_status`): 코디네이터를 즉시 새로고침해 센서 값을 갱신합니다.

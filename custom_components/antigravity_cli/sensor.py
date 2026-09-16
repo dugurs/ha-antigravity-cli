@@ -67,6 +67,20 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         icon="mdi:calendar-clock",
         state_class=SensorStateClass.MEASUREMENT,
     ),
+    SensorEntityDescription(
+        key="gemini_quota",
+        translation_key="gemini_quota",
+        icon="mdi:google",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SensorEntityDescription(
+        key="claude_quota",
+        translation_key="claude_quota",
+        icon="mdi:creation",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
 )
 
 
@@ -78,10 +92,7 @@ async def async_setup_entry(
     """Set up the sensor platform."""
     coordinator: AntigravityDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
 
-    async_add_entities(
-        AntigravitySensor(coordinator, description)
-        for description in SENSOR_TYPES
-    )
+    async_add_entities(AntigravitySensor(coordinator, description) for description in SENSOR_TYPES)
 
 
 class AntigravitySensor(AntigravityEntity, SensorEntity):
@@ -106,16 +117,18 @@ class AntigravitySensor(AntigravityEntity, SensorEntity):
         if self.entity_description.key == "daemon_status":
             if self.coordinator.data.get("status") == "offline":
                 return "offline"
-            return (
-                "running"
-                if self.coordinator.data.get("remote_control_running")
-                else "stopped"
-            )
+            return "running" if self.coordinator.data.get("remote_control_running") else "stopped"
         if self.entity_description.key == "agent_activity":
             if self.coordinator.data.get("status") == "offline":
                 return "offline"
             activity = self.coordinator.data.get("activity") or {}
             return activity.get("state", "idle")
+        if self.entity_description.key == "gemini_quota":
+            usage = self.coordinator.data.get("usage") or {}
+            return usage.get("gemini_weekly_remaining")
+        if self.entity_description.key == "claude_quota":
+            usage = self.coordinator.data.get("usage") or {}
+            return usage.get("claude_weekly_remaining")
         return self.coordinator.data.get(self.entity_description.key)
 
     @property
@@ -156,5 +169,15 @@ class AntigravitySensor(AntigravityEntity, SensorEntity):
                 "current_tool": activity.get("current_tool"),
                 "target_file": activity.get("target_file"),
                 "reason": activity.get("reason"),
+            }
+        if self.entity_description.key == "gemini_quota":
+            usage = self.coordinator.data.get("usage") or {}
+            return {
+                "five_hour_remaining_pct": usage.get("gemini_5h_remaining"),
+            }
+        if self.entity_description.key == "claude_quota":
+            usage = self.coordinator.data.get("usage") or {}
+            return {
+                "five_hour_remaining_pct": usage.get("claude_5h_remaining"),
             }
         return None

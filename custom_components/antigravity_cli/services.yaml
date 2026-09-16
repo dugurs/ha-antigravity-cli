@@ -1,0 +1,41 @@
+chat:
+  name: Send Chat Prompt
+  description: Send a chat prompt to the Antigravity CLI agent hub with options for mode, conversation ID, and model, returning the generated response.
+  fields:
+    message:
+      name: Message
+      description: The chat message or prompt to send to the Antigravity CLI agent.
+      required: true
+      example: "거실 불 켜줘"
+      selector:
+        text:
+          multiline: true
+    mode:
+      name: Processing Mode
+      description: Chat execution mode (hybrid/3: autonomous agent, llm_mcp/2: LLM MCP tools, fast_local/1: fast device control).
+      required: false
+      default: "hybrid"
+      example: "hybrid"
+      selector:
+        select:
+          options:
+            - label: "Hybrid / Mode 3 (자율 에이전트)"
+              value: "hybrid"
+            - label: "LLM + MCP / Mode 2"
+              value: "llm_mcp"
+            - label: "Fast Local / Mode 1 (고속 제어)"
+              value: "fast_local"
+    chat_id:
+      name: Conversation ID
+      description: Optional conversation ID to continue an existing chat session.
+      required: false
+      example: "b1328fc8-500b-466d-8cf8-05244585c57b"
+      selector:
+        text:
+    model:
+      name: Model
+      description: Optional model name to override the default model.
+      required: false
+      example: "gemini-2.5-flash"
+      selector:
+        text:

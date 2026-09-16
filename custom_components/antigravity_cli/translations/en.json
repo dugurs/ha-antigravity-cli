@@ -71,6 +71,12 @@
       },
       "scheduled_count": {
         "name": "Scheduled Executions"
+      },
+      "gemini_quota": {
+        "name": "Gemini Quota Remaining"
+      },
+      "claude_quota": {
+        "name": "Claude Quota Remaining"
       }
     },
     "binary_sensor": {
@@ -86,11 +92,51 @@
     "switch": {
       "remote_control": {
         "name": "Remote Control Daemon"
+      },
+      "auto_start_remote_control": {
+        "name": "Auto-start Remote Daemon"
+      },
+      "enable_terminal": {
+        "name": "Web Terminal"
+      }
+    },
+    "select": {
+      "chat_mode": {
+        "name": "Chat Mode",
+        "state": {
+          "full": "Full (Autonomous)",
+          "fast_only": "Fast Only (Local)",
+          "monitoring": "Monitoring (Chat Disabled)"
+        }
       }
     },
     "conversation": {
       "assistant": {
         "name": "Assistant"
+      }
+    }
+  },
+  "services": {
+    "chat": {
+      "name": "Send Chat Prompt",
+      "description": "Send a chat prompt to the Antigravity CLI agent hub with options for mode, conversation ID, and model, returning the generated response.",
+      "fields": {
+        "message": {
+          "name": "Message",
+          "description": "The chat message or prompt to send to the Antigravity CLI agent."
+        },
+        "mode": {
+          "name": "Processing Mode",
+          "description": "Chat execution mode (hybrid: autonomous agent, llm_mcp: LLM MCP tools, fast_local: fast device control)."
+        },
+        "chat_id": {
+          "name": "Conversation ID",
+          "description": "Optional conversation ID to continue an existing chat session."
+        },
+        "model": {
+          "name": "Model",
+          "description": "Optional model name to override the default model."
+        }
       }
     }
   }

@@ -90,6 +90,18 @@ class AntigravityDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "current_tool": None,
                 "target_file": None,
             },
+            "options": {
+                "auto_start_remote_control": False,
+                "enable_terminal": True,
+                "chat_mode": "full",
+            },
+            "usage": {
+                "available": False,
+                "gemini_weekly_remaining": None,
+                "gemini_5h_remaining": None,
+                "claude_weekly_remaining": None,
+                "claude_5h_remaining": None,
+            },
             "scheduled_count": 0,
             "scheduled_list": [],
         }

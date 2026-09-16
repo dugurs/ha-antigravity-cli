@@ -28,10 +28,7 @@ async def async_setup_entry(
     """Set up the button platform."""
     coordinator: AntigravityDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
 
-    async_add_entities(
-        AntigravityButton(coordinator, description)
-        for description in BUTTON_TYPES
-    )
+    async_add_entities(AntigravityButton(coordinator, description) for description in BUTTON_TYPES)
 
 
 class AntigravityButton(AntigravityEntity, ButtonEntity):

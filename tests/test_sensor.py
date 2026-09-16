@@ -52,13 +52,17 @@ async def test_sensor_setup_and_values(hass: HomeAssistant) -> None:
             },
             "scheduled_count": 3,
             "scheduled_list": [{"id": 1, "action": "turn_off"}],
+            "usage": {
+                "gemini_weekly_remaining": 85.5,
+                "claude_weekly_remaining": 92.0,
+            },
         }
         hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
         entities: list[AntigravitySensor] = []
         await async_setup_entry(hass, entry, entities.extend)
 
-        assert len(entities) == 8
+        assert len(entities) == 10
         sensor_by_key = {entity.entity_description.key: entity for entity in entities}
 
         assert sensor_by_key["status"].native_value == "online"
@@ -83,6 +87,10 @@ async def test_sensor_setup_and_values(hass: HomeAssistant) -> None:
         assert sensor_by_key["scheduled_count"].extra_state_attributes == {
             "scheduled_list": [{"id": 1, "action": "turn_off"}]
         }
+        assert sensor_by_key["gemini_quota"].native_value == 85.5
+        assert sensor_by_key["gemini_quota"].native_unit_of_measurement == "%"
+        assert sensor_by_key["claude_quota"].native_value == 92.0
+        assert sensor_by_key["claude_quota"].native_unit_of_measurement == "%"
 
         # Test file_working activity state
         coordinator.data["activity"] = {
@@ -95,7 +103,9 @@ async def test_sensor_setup_and_values(hass: HomeAssistant) -> None:
         assert sensor_by_key["agent_activity"].native_value == "file_working"
         assert sensor_by_key["agent_activity"].icon == "mdi:file-edit"
         assert sensor_by_key["agent_activity"].extra_state_attributes["lock_active"] is True
-        assert sensor_by_key["agent_activity"].extra_state_attributes["target_file"] == "config.yaml"
+        assert (
+            sensor_by_key["agent_activity"].extra_state_attributes["target_file"] == "config.yaml"
+        )
 
         # Test thinking activity state
         coordinator.data["activity"]["state"] = "thinking"

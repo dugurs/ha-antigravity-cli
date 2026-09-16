@@ -72,6 +72,10 @@ async def test_switch_setup_and_control(hass: HomeAssistant) -> None:
             },
             "scheduled_count": 0,
             "scheduled_list": [],
+            "options": {
+                "auto_start_remote_control": False,
+                "enable_terminal": True,
+            },
         }
         coordinator.async_request_refresh = AsyncMock()
         hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
@@ -79,13 +83,38 @@ async def test_switch_setup_and_control(hass: HomeAssistant) -> None:
         entities: list[AntigravitySwitch] = []
         await async_setup_entry(hass, entry, entities.extend)
 
-        assert len(entities) == 1
-        switch = entities[0]
+        assert len(entities) == 3
+        switches_by_key = {entity.entity_description.key: entity for entity in entities}
+
+        switch = switches_by_key["remote_control_running"]
         assert isinstance(switch, AntigravitySwitch)
         assert switch.unique_id == f"{entry.entry_id}_remote_control_running"
         assert switch.is_on is False
 
-        # Turn on
+        # Test Option Switches
+        auto_start_switch = switches_by_key["auto_start_remote_control"]
+        assert auto_start_switch.is_on is False
+        await auto_start_switch.async_turn_on()
+        assert mock_session.post.call_count == 1
+        url_called = mock_session.post.call_args[0][0]
+        json_called = mock_session.post.call_args[1]["json"]
+        assert url_called.endswith("/api/options")
+        assert json_called == {"auto_start_remote_control": True}
+
+        terminal_switch = switches_by_key["enable_terminal"]
+        assert terminal_switch.is_on is True
+        await terminal_switch.async_turn_off()
+        assert mock_session.post.call_count == 2
+        url_called = mock_session.post.call_args[0][0]
+        json_called = mock_session.post.call_args[1]["json"]
+        assert url_called.endswith("/api/options")
+        assert json_called == {"enable_terminal": False}
+
+        # Reset call count for daemon switch tests
+        mock_session.post.reset_mock()
+        coordinator.async_request_refresh.reset_mock()
+
+        # Turn on daemon switch
         await switch.async_turn_on()
         assert mock_session.post.call_count == 1
         url_called = mock_session.post.call_args[0][0]

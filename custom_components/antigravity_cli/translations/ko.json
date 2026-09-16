@@ -71,6 +71,12 @@
       },
       "scheduled_count": {
         "name": "예약된 실행 개수"
+      },
+      "gemini_quota": {
+        "name": "Gemini 주간 잔여량"
+      },
+      "claude_quota": {
+        "name": "Claude 주간 잔여량"
       }
     },
     "binary_sensor": {
@@ -86,11 +92,51 @@
     "switch": {
       "remote_control": {
         "name": "리모트 제어 데몬"
+      },
+      "auto_start_remote_control": {
+        "name": "리모트 데몬 자동 시작"
+      },
+      "enable_terminal": {
+        "name": "웹 터미널"
+      }
+    },
+    "select": {
+      "chat_mode": {
+        "name": "채팅 작동 모드",
+        "state": {
+          "full": "자율 에이전트 (전체)",
+          "fast_only": "로컬 고속 제어 전용",
+          "monitoring": "모니터링 전용 (채팅 비활성화)"
+        }
       }
     },
     "conversation": {
       "assistant": {
         "name": "어시스턴트"
+      }
+    }
+  },
+  "services": {
+    "chat": {
+      "name": "챗 프롬프트 전송",
+      "description": "모드, 대화 ID, 모델을 지정하여 Antigravity CLI 에이전트 허브에 챗 프롬프트를 전송하고 응답을 반환받습니다.",
+      "fields": {
+        "message": {
+          "name": "메시지",
+          "description": "Antigravity CLI 에이전트에 보낼 챗 메시지 또는 프롬프트입니다."
+        },
+        "mode": {
+          "name": "처리 모드",
+          "description": "챗 실행 모드 (hybrid: 자율 에이전트, llm_mcp: LLM MCP 도구, fast_local: 고속 기기 제어)."
+        },
+        "chat_id": {
+          "name": "대화 ID",
+          "description": "기존 챗 세션을 이어가기 위한 선택적 대화 ID입니다."
+        },
+        "model": {
+          "name": "모델",
+          "description": "기본 모델을 재정의할 선택적 모델명입니다."
+        }
       }
     }
   }
