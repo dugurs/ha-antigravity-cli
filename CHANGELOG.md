@@ -15,9 +15,11 @@ All notable changes to the `antigravity_cli` Home Assistant integration will be 
   - **Tier 2 (1.0~1.5초)**: 비정형 자연어 질의 직결 Gemini API (`gemini-2.5-flash`)
   - **Tier 3 (4~10초)**: 접두사(`/agy`, `/ai`) 명시 시 또는 Gemini 미설정 시 애드온 `/api/chat` 자율 에이전트/MCP(88개 도구) 폴백
   - **Tier 4 (오프라인 폴백)**: 외부 API 및 애드온 서버 불가 시, 엉뚱한 집 상태 요약 대신 정확한 원인 및 조치 안내 메시지 즉시 반환
-- **애드온 MCP 사용 및 폴백 온/오프 옵션 (`enable_addon_mcp`) 추가**:
-  - 통합구성요소 옵션에서 애드온 MCP(ha-mcp) 사용 여부를 자유롭게 선택 가능
-  - MCP 사용을 끄면 Tier 3 조건(자연어 질의 시 Gemini 미설정/실패 또는 `/agy` 등 명시 시)에서 느린 MCP 대기 없이 즉시 사용 불가 안내 메시지를 사용자에게 음성/텍스트로 반환
+- **대화 처리 동작 모드 일원화 (3종 통합 모드)**:
+  - 중복되던 애드온 MCP 체크박스를 제거하고 [대화 처리 동작 모드] 단일 드롭다운으로 일원화
+  - `초고속 모드 (로컬 + Gemini API)`: 로컬 0.05초 + Gemini 1초대 직결 (MCP 대기 완전 배제, 최고 속도)
+  - `풀 하이브리드 모드 (로컬 + Gemini + 애드온 MCP)`: 로컬 -> Gemini -> 애드온 88개 MCP 도구까지 총동원
+  - `로컬 전용 모드`: 외부 통신 없는 순수 로컬 패턴 매칭 전용
 - **테스트 스위트 확장**:
   - `test_conversation.py`, `test_config_flow.py`, `test_gemini_client.py` 등 총 28개 테스트 전원 통과 (100% Pass)
 

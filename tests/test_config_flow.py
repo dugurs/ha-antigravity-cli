@@ -70,12 +70,11 @@ async def test_options_flow(hass: HomeAssistant) -> None:
 
     from custom_components.antigravity_cli.const import (
         CONF_API_KEY,
-        CONF_ENABLE_ADDON_MCP,
         CONF_GEMINI_API_KEY,
         CONF_GEMINI_MODEL,
         CONF_POLL_INTERVAL,
         CONF_PROCESSING_MODE,
-        MODE_HYBRID,
+        MODE_FULL_HYBRID,
     )
 
     entry = MockConfigEntry(
@@ -95,18 +94,17 @@ async def test_options_flow(hass: HomeAssistant) -> None:
     result2 = await hass.config_entries.options.async_configure(
         result["flow_id"],
         user_input={
-            CONF_PROCESSING_MODE: MODE_HYBRID,
+            CONF_PROCESSING_MODE: MODE_FULL_HYBRID,
             CONF_PORT: 8000,
             CONF_POLL_INTERVAL: 30,
             CONF_API_KEY: "",
             CONF_GEMINI_API_KEY: "AIzaSyTest123",
             CONF_GEMINI_MODEL: "gemini-2.5-flash",
-            CONF_ENABLE_ADDON_MCP: False,
         },
     )
     await hass.async_block_till_done()
 
     assert result2["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
+    assert result2["data"][CONF_PROCESSING_MODE] == MODE_FULL_HYBRID
     assert result2["data"][CONF_GEMINI_API_KEY] == "AIzaSyTest123"
     assert result2["data"][CONF_GEMINI_MODEL] == "gemini-2.5-flash"
-    assert result2["data"][CONF_ENABLE_ADDON_MCP] is False

@@ -241,7 +241,11 @@ async def test_process_gemini_fallback_to_addon(hass: HomeAssistant) -> None:
     from homeassistant.components.conversation import ConversationInput
     from homeassistant.core import Context
 
-    from custom_components.antigravity_cli.const import CONF_GEMINI_API_KEY
+    from custom_components.antigravity_cli.const import (
+        CONF_GEMINI_API_KEY,
+        CONF_PROCESSING_MODE,
+        MODE_FULL_HYBRID,
+    )
 
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -251,6 +255,7 @@ async def test_process_gemini_fallback_to_addon(hass: HomeAssistant) -> None:
             CONF_PORT: 8000,
             CONF_GEMINI_API_KEY: "AIzaSyFakeKey123",
         },
+        options={CONF_PROCESSING_MODE: MODE_FULL_HYBRID},
     )
     entry.add_to_hass(hass)
 
@@ -298,10 +303,16 @@ async def test_process_explicit_cli_prefix(hass: HomeAssistant) -> None:
     from homeassistant.components.conversation import ConversationInput
     from homeassistant.core import Context
 
+    from custom_components.antigravity_cli.const import (
+        CONF_PROCESSING_MODE,
+        MODE_FULL_HYBRID,
+    )
+
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Antigravity CLI (127.0.0.1:8000)",
         data={CONF_HOST: "127.0.0.1", CONF_PORT: 8000},
+        options={CONF_PROCESSING_MODE: MODE_FULL_HYBRID},
     )
     entry.add_to_hass(hass)
 
@@ -383,21 +394,18 @@ async def test_process_mode_fast_local(hass: HomeAssistant) -> None:
             result = await entity.async_process(user_input)
             assert not mock_addon.called
 
-    assert "로컬 고속 모드" in result.response.speech["plain"]["speech"]
+    assert "로컬 전용 모드" in result.response.speech["plain"]["speech"]
 
 
-async def test_process_addon_mcp_disabled_hybrid_fallback(hass: HomeAssistant) -> None:
-    """Test disabled addon MCP fallback gives clean notice without calling addon."""
+async def test_process_hybrid_mode_no_mcp_fallback(hass: HomeAssistant) -> None:
+    """Test fast hybrid mode does not invoke addon MCP without Gemini key."""
     from homeassistant.components.conversation import ConversationInput
     from homeassistant.core import Context
-
-    from custom_components.antigravity_cli.const import CONF_ENABLE_ADDON_MCP
 
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Antigravity CLI (127.0.0.1:8000)",
         data={CONF_HOST: "127.0.0.1", CONF_PORT: 8000},
-        options={CONF_ENABLE_ADDON_MCP: False},
     )
     entry.add_to_hass(hass)
 
@@ -427,21 +435,19 @@ async def test_process_addon_mcp_disabled_hybrid_fallback(hass: HomeAssistant) -
             result = await entity.async_process(user_input)
             assert not mock_addon.called
 
-    assert "애드온 MCP 사용이 비활성화되어 있습니다" in result.response.speech["plain"]["speech"]
+    speech = result.response.speech["plain"]["speech"]
+    assert "풀 하이브리드 모드" in speech
 
 
-async def test_process_addon_mcp_disabled_explicit_cli(hass: HomeAssistant) -> None:
-    """Test disabled addon MCP prevents explicit CLI trigger with notice."""
+async def test_process_hybrid_mode_explicit_cli_blocked(hass: HomeAssistant) -> None:
+    """Test fast hybrid mode blocks explicit CLI trigger with helpful guidance."""
     from homeassistant.components.conversation import ConversationInput
     from homeassistant.core import Context
-
-    from custom_components.antigravity_cli.const import CONF_ENABLE_ADDON_MCP
 
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Antigravity CLI (127.0.0.1:8000)",
         data={CONF_HOST: "127.0.0.1", CONF_PORT: 8000},
-        options={CONF_ENABLE_ADDON_MCP: False},
     )
     entry.add_to_hass(hass)
 
@@ -471,18 +477,25 @@ async def test_process_addon_mcp_disabled_explicit_cli(hass: HomeAssistant) -> N
             result = await entity.async_process(user_input)
             assert not mock_addon.called
 
-    assert "애드온 MCP 사용이 비활성화되어 있어" in result.response.speech["plain"]["speech"]
+    speech = result.response.speech["plain"]["speech"]
+    assert "풀 하이브리드 모드" in speech
 
 
 async def test_process_tier4_offline_fallback(hass: HomeAssistant) -> None:
-    """Test Tier 4 offline fallback guides user when both Gemini and addon fail."""
+    """Test Tier 4 offline fallback guides user when both Gemini and addon fail in Full Hybrid."""
     from homeassistant.components.conversation import ConversationInput
     from homeassistant.core import Context
+
+    from custom_components.antigravity_cli.const import (
+        CONF_PROCESSING_MODE,
+        MODE_FULL_HYBRID,
+    )
 
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Antigravity CLI (127.0.0.1:8000)",
         data={CONF_HOST: "127.0.0.1", CONF_PORT: 8000},
+        options={CONF_PROCESSING_MODE: MODE_FULL_HYBRID},
     )
     entry.add_to_hass(hass)
 

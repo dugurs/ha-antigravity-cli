@@ -13,16 +13,15 @@ CONF_POLL_INTERVAL: Final = "poll_interval"
 CONF_PROCESSING_MODE: Final = "processing_mode"
 CONF_GEMINI_API_KEY: Final = "gemini_api_key"
 CONF_GEMINI_MODEL: Final = "gemini_model"
-CONF_ENABLE_ADDON_MCP: Final = "enable_addon_mcp"
 
 # Processing Modes
 MODE_HYBRID: Final = "hybrid"
-MODE_LLM_MCP: Final = "llm_mcp"
+MODE_FULL_HYBRID: Final = "full_hybrid"
 MODE_FAST_LOCAL: Final = "fast_local"
 
 PROCESSING_MODES: Final = [
     MODE_HYBRID,
-    MODE_LLM_MCP,
+    MODE_FULL_HYBRID,
     MODE_FAST_LOCAL,
 ]
 
@@ -32,7 +31,6 @@ DEFAULT_PORT: Final = 8000
 DEFAULT_POLL_INTERVAL: Final = 30  # seconds
 DEFAULT_PROCESSING_MODE: Final = MODE_HYBRID
 DEFAULT_GEMINI_MODEL: Final = "gemini-2.5-flash"
-DEFAULT_ENABLE_ADDON_MCP: Final = True
 
 GEMINI_MODELS: Final = [
     "gemini-2.5-flash",

@@ -31,8 +31,7 @@
           "poll_interval": "데이터 폴링 주기(초)",
           "api_key": "API 키 (선택사항)",
           "gemini_api_key": "Gemini API 키 (선택사항, 고속 자연어 음성 처리용)",
-          "gemini_model": "Gemini 모델",
-          "enable_addon_mcp": "애드온 MCP(ha-mcp) 사용 및 폴백 허용"
+          "gemini_model": "Gemini 모델"
         }
       }
     }

@@ -15,14 +15,12 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
     CONF_API_KEY,
-    CONF_ENABLE_ADDON_MCP,
     CONF_GEMINI_API_KEY,
     CONF_GEMINI_MODEL,
     CONF_HOST,
     CONF_POLL_INTERVAL,
     CONF_PORT,
     CONF_PROCESSING_MODE,
-    DEFAULT_ENABLE_ADDON_MCP,
     DEFAULT_GEMINI_MODEL,
     DEFAULT_HOST,
     DEFAULT_POLL_INTERVAL,
@@ -31,8 +29,8 @@ from .const import (
     DOMAIN,
     GEMINI_MODELS,
     MODE_FAST_LOCAL,
+    MODE_FULL_HYBRID,
     MODE_HYBRID,
-    MODE_LLM_MCP,
     NAME,
 )
 
@@ -44,7 +42,6 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
         vol.Optional(CONF_API_KEY, default=""): str,
         vol.Optional(CONF_GEMINI_API_KEY, default=""): str,
-        vol.Optional(CONF_ENABLE_ADDON_MCP, default=DEFAULT_ENABLE_ADDON_MCP): bool,
         vol.Optional(CONF_POLL_INTERVAL, default=DEFAULT_POLL_INTERVAL): int,
     }
 )
@@ -126,6 +123,10 @@ class AntigravityOptionsFlowHandler(config_entries.OptionsFlow):
             CONF_PROCESSING_MODE,
             self._config_entry.data.get(CONF_PROCESSING_MODE, DEFAULT_PROCESSING_MODE),
         )
+        if current_mode == "llm_mcp":
+            current_mode = MODE_FULL_HYBRID
+        elif current_mode not in [MODE_HYBRID, MODE_FULL_HYBRID, MODE_FAST_LOCAL]:
+            current_mode = MODE_HYBRID
 
         return self.async_show_form(
             step_id="init",
@@ -139,15 +140,15 @@ class AntigravityOptionsFlowHandler(config_entries.OptionsFlow):
                             options=[
                                 selector.SelectOptionDict(
                                     value=MODE_HYBRID,
-                                    label="하이브리드 모드 (빠른 로컬 제어 + AI 어시스턴트)",
+                                    label="초고속 모드 (로컬 + Gemini API)",
                                 ),
                                 selector.SelectOptionDict(
-                                    value=MODE_LLM_MCP,
-                                    label="순수 AI 모드 (Antigravity LLM + ha-mcp 100%)",
+                                    value=MODE_FULL_HYBRID,
+                                    label="풀 하이브리드 모드 (로컬 + Gemini + 애드온 MCP)",
                                 ),
                                 selector.SelectOptionDict(
                                     value=MODE_FAST_LOCAL,
-                                    label="로컬 고속 모드 (로컬 도메인 매칭 전용)",
+                                    label="로컬 전용 모드 (로컬 매칭 전용)",
                                 ),
                             ],
                             mode=selector.SelectSelectorMode.DROPDOWN,
@@ -196,15 +197,6 @@ class AntigravityOptionsFlowHandler(config_entries.OptionsFlow):
                             mode=selector.SelectSelectorMode.DROPDOWN,
                         )
                     ),
-                    vol.Optional(
-                        CONF_ENABLE_ADDON_MCP,
-                        default=self._config_entry.options.get(
-                            CONF_ENABLE_ADDON_MCP,
-                            self._config_entry.data.get(
-                                CONF_ENABLE_ADDON_MCP, DEFAULT_ENABLE_ADDON_MCP
-                            ),
-                        ),
-                    ): bool,
                 }
             ),
         )

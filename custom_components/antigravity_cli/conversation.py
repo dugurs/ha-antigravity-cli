@@ -27,16 +27,14 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from .const import (
-    CONF_ENABLE_ADDON_MCP,
     CONF_GEMINI_API_KEY,
     CONF_GEMINI_MODEL,
     CONF_PROCESSING_MODE,
-    DEFAULT_ENABLE_ADDON_MCP,
     DEFAULT_GEMINI_MODEL,
     DEFAULT_PROCESSING_MODE,
     DOMAIN,
     MODE_FAST_LOCAL,
-    MODE_LLM_MCP,
+    MODE_FULL_HYBRID,
     NAME,
 )
 from .coordinator import AntigravityDataUpdateCoordinator
@@ -551,10 +549,13 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
     @property
     def processing_mode(self) -> str:
         """Return active processing mode from options or config data."""
-        return self._entry.options.get(
+        mode = self._entry.options.get(
             CONF_PROCESSING_MODE,
             self._entry.data.get(CONF_PROCESSING_MODE, DEFAULT_PROCESSING_MODE),
         )
+        if mode == "llm_mcp":
+            return MODE_FULL_HYBRID
+        return mode
 
     @property
     def gemini_api_key(self) -> str:
@@ -576,12 +577,9 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
         )
 
     @property
-    def enable_addon_mcp(self) -> bool:
-        """Return whether addon MCP fallback is enabled."""
-        return self._entry.options.get(
-            CONF_ENABLE_ADDON_MCP,
-            self._entry.data.get(CONF_ENABLE_ADDON_MCP, DEFAULT_ENABLE_ADDON_MCP),
-        )
+    def is_addon_mcp_enabled(self) -> bool:
+        """Return whether addon MCP is enabled based on processing mode."""
+        return self.processing_mode == MODE_FULL_HYBRID
 
     def _get_or_create_session(self, conversation_id: str | None) -> ConversationSession:
         """Get or initialize context session with 5-minute expiry."""
@@ -1646,12 +1644,12 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
         mode = self.processing_mode
         session = self._get_or_create_session(user_input.conversation_id)
 
-        # 1. Pure AI / Autonomous CLI Mode or explicit CLI trigger
-        if force_llm or mode == MODE_LLM_MCP:
-            if not self.enable_addon_mcp:
+        # 1. Explicit CLI trigger (/agy, /ai, 질문: etc.)
+        if force_llm:
+            if mode != MODE_FULL_HYBRID:
                 intent_response.async_set_speech(
-                    "애드온 MCP 사용이 비활성화되어 있어 자율 에이전트 명령을 실행할 수 없습니다. "
-                    "통합구성요소 옵션에서 애드온 MCP 사용을 활성화해주세요."
+                    "현재 설정된 대화 처리 모드에서는 애드온 MCP 자율 에이전트가 비활성화되어 있습니다. "
+                    "통합구성요소 옵션에서 '풀 하이브리드 모드'로 변경해주세요."
                 )
                 return ConversationResult(
                     response=intent_response,
@@ -1708,14 +1706,14 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
             if not local_speech:
                 local_speech = self._handle_info_query(target_prompt, session)
             if not local_speech:
-                local_speech = "로컬 고속 모드에서는 해당 명령을 처리할 수 없습니다."
+                local_speech = "로컬 전용 모드에서는 해당 명령을 처리할 수 없습니다."
             intent_response.async_set_speech(local_speech)
             return ConversationResult(
                 response=intent_response,
                 conversation_id=user_input.conversation_id,
             )
 
-        # 3. Hybrid Mode (Default):
+        # 3. Hybrid Modes (Fast Hybrid or Full Hybrid)
         # Tier 1: Local Fast Matching (~0.05s)
         local_speech = await self._handle_local_fallback(target_prompt, session)
         if not local_speech:
@@ -1736,22 +1734,20 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
                     response=intent_response,
                     conversation_id=user_input.conversation_id,
                 )
-            _LOGGER.info(
-                "Gemini direct processing failed or returned empty; evaluating Tier 3/4 addon MCP"
-            )
+            _LOGGER.info("Gemini direct processing failed or returned empty; evaluating next tier")
 
-        # Tier 3/4: Addon MCP Fallback or Disabled Notice
-        if not self.enable_addon_mcp:
+        # In Fast Hybrid Mode (MODE_HYBRID): Addon MCP is not invoked (Speed priority)
+        if mode != MODE_FULL_HYBRID:
             intent_response.async_set_speech(
-                "해당 명령을 처리할 수 없습니다. (애드온 MCP 사용이 비활성화되어 있습니다. "
-                "통합구성요소 옵션에서 Gemini API 키를 등록하거나 애드온 MCP 사용을 활성화해주세요.)"
+                "해당 명령을 이해하거나 처리할 수 없습니다. "
+                "(Gemini API 키를 등록하거나 대화 처리 모드를 '풀 하이브리드 모드'로 변경해주세요.)"
             )
             return ConversationResult(
                 response=intent_response,
                 conversation_id=user_input.conversation_id,
             )
 
-        # Tier 3: Addon /api/chat fallback (MCP enabled)
+        # Tier 3: Addon /api/chat fallback (Only in Full Hybrid Mode)
         addon_text, conv_id, err = await self._call_addon_chat(
             target_prompt, user_input.conversation_id, is_direct_llm=False
         )
