@@ -15,12 +15,14 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
     CONF_API_KEY,
+    CONF_ENABLE_ADDON_MCP,
     CONF_GEMINI_API_KEY,
     CONF_GEMINI_MODEL,
     CONF_HOST,
     CONF_POLL_INTERVAL,
     CONF_PORT,
     CONF_PROCESSING_MODE,
+    DEFAULT_ENABLE_ADDON_MCP,
     DEFAULT_GEMINI_MODEL,
     DEFAULT_HOST,
     DEFAULT_POLL_INTERVAL,
@@ -42,6 +44,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
         vol.Optional(CONF_API_KEY, default=""): str,
         vol.Optional(CONF_GEMINI_API_KEY, default=""): str,
+        vol.Optional(CONF_ENABLE_ADDON_MCP, default=DEFAULT_ENABLE_ADDON_MCP): bool,
         vol.Optional(CONF_POLL_INTERVAL, default=DEFAULT_POLL_INTERVAL): int,
     }
 )
@@ -193,6 +196,15 @@ class AntigravityOptionsFlowHandler(config_entries.OptionsFlow):
                             mode=selector.SelectSelectorMode.DROPDOWN,
                         )
                     ),
+                    vol.Optional(
+                        CONF_ENABLE_ADDON_MCP,
+                        default=self._config_entry.options.get(
+                            CONF_ENABLE_ADDON_MCP,
+                            self._config_entry.data.get(
+                                CONF_ENABLE_ADDON_MCP, DEFAULT_ENABLE_ADDON_MCP
+                            ),
+                        ),
+                    ): bool,
                 }
             ),
         )

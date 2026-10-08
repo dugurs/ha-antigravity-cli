@@ -27,9 +27,11 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_ENABLE_ADDON_MCP,
     CONF_GEMINI_API_KEY,
     CONF_GEMINI_MODEL,
     CONF_PROCESSING_MODE,
+    DEFAULT_ENABLE_ADDON_MCP,
     DEFAULT_GEMINI_MODEL,
     DEFAULT_PROCESSING_MODE,
     DOMAIN,
@@ -571,6 +573,14 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
         return self._entry.options.get(
             CONF_GEMINI_MODEL,
             self._entry.data.get(CONF_GEMINI_MODEL, DEFAULT_GEMINI_MODEL),
+        )
+
+    @property
+    def enable_addon_mcp(self) -> bool:
+        """Return whether addon MCP fallback is enabled."""
+        return self._entry.options.get(
+            CONF_ENABLE_ADDON_MCP,
+            self._entry.data.get(CONF_ENABLE_ADDON_MCP, DEFAULT_ENABLE_ADDON_MCP),
         )
 
     def _get_or_create_session(self, conversation_id: str | None) -> ConversationSession:
@@ -1638,6 +1648,16 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
 
         # 1. Pure AI / Autonomous CLI Mode or explicit CLI trigger
         if force_llm or mode == MODE_LLM_MCP:
+            if not self.enable_addon_mcp:
+                intent_response.async_set_speech(
+                    "애드온 MCP 사용이 비활성화되어 있어 자율 에이전트 명령을 실행할 수 없습니다. "
+                    "통합구성요소 옵션에서 애드온 MCP 사용을 활성화해주세요."
+                )
+                return ConversationResult(
+                    response=intent_response,
+                    conversation_id=user_input.conversation_id,
+                )
+
             addon_text, conv_id, err = await self._call_addon_chat(
                 target_prompt, user_input.conversation_id, is_direct_llm=True
             )
@@ -1712,10 +1732,21 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
                     conversation_id=user_input.conversation_id,
                 )
             _LOGGER.info(
-                "Gemini direct processing failed or returned empty; falling back to addon /api/chat"
+                "Gemini direct processing failed or returned empty; evaluating Tier 3/4 addon MCP"
             )
 
-        # Tier 3: Addon /api/chat fallback
+        # Tier 3/4: Addon MCP Fallback or Disabled Notice
+        if not self.enable_addon_mcp:
+            intent_response.async_set_speech(
+                "해당 명령을 처리할 수 없습니다. (애드온 MCP 사용이 비활성화되어 있습니다. "
+                "통합구성요소 옵션에서 Gemini API 키를 등록하거나 애드온 MCP 사용을 활성화해주세요.)"
+            )
+            return ConversationResult(
+                response=intent_response,
+                conversation_id=user_input.conversation_id,
+            )
+
+        # Tier 3: Addon /api/chat fallback (MCP enabled)
         addon_text, conv_id, err = await self._call_addon_chat(
             target_prompt, user_input.conversation_id, is_direct_llm=False
         )

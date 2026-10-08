@@ -384,3 +384,91 @@ async def test_process_mode_fast_local(hass: HomeAssistant) -> None:
             assert not mock_addon.called
 
     assert "로컬 고속 모드" in result.response.speech["plain"]["speech"]
+
+
+async def test_process_addon_mcp_disabled_hybrid_fallback(hass: HomeAssistant) -> None:
+    """Test disabled addon MCP fallback gives clean notice without calling addon."""
+    from homeassistant.components.conversation import ConversationInput
+    from homeassistant.core import Context
+
+    from custom_components.antigravity_cli.const import CONF_ENABLE_ADDON_MCP
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Antigravity CLI (127.0.0.1:8000)",
+        data={CONF_HOST: "127.0.0.1", CONF_PORT: 8000},
+        options={CONF_ENABLE_ADDON_MCP: False},
+    )
+    entry.add_to_hass(hass)
+
+    with (
+        patch(
+            "custom_components.antigravity_cli.coordinator.async_get_clientsession",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "custom_components.antigravity_cli.conversation.async_get_clientsession",
+            return_value=MagicMock(),
+        ),
+    ):
+        coordinator = AntigravityDataUpdateCoordinator(hass, entry)
+        entity = AntigravityConversationEntity(coordinator, entry)
+        entity.hass = hass
+
+        user_input = ConversationInput(
+            text="아인슈타인은 누구야?",
+            context=Context(),
+            conversation_id="conv_mcp_disabled",
+            device_id=None,
+            language="ko",
+        )
+
+        with patch.object(entity, "_call_addon_chat") as mock_addon:
+            result = await entity.async_process(user_input)
+            assert not mock_addon.called
+
+    assert "애드온 MCP 사용이 비활성화되어 있습니다" in result.response.speech["plain"]["speech"]
+
+
+async def test_process_addon_mcp_disabled_explicit_cli(hass: HomeAssistant) -> None:
+    """Test disabled addon MCP prevents explicit CLI trigger with notice."""
+    from homeassistant.components.conversation import ConversationInput
+    from homeassistant.core import Context
+
+    from custom_components.antigravity_cli.const import CONF_ENABLE_ADDON_MCP
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Antigravity CLI (127.0.0.1:8000)",
+        data={CONF_HOST: "127.0.0.1", CONF_PORT: 8000},
+        options={CONF_ENABLE_ADDON_MCP: False},
+    )
+    entry.add_to_hass(hass)
+
+    with (
+        patch(
+            "custom_components.antigravity_cli.coordinator.async_get_clientsession",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "custom_components.antigravity_cli.conversation.async_get_clientsession",
+            return_value=MagicMock(),
+        ),
+    ):
+        coordinator = AntigravityDataUpdateCoordinator(hass, entry)
+        entity = AntigravityConversationEntity(coordinator, entry)
+        entity.hass = hass
+
+        user_input = ConversationInput(
+            text="/agy 데몬 상태 점검해줘",
+            context=Context(),
+            conversation_id="conv_mcp_disabled_cli",
+            device_id=None,
+            language="ko",
+        )
+
+        with patch.object(entity, "_call_addon_chat") as mock_addon:
+            result = await entity.async_process(user_input)
+            assert not mock_addon.called
+
+    assert "애드온 MCP 사용이 비활성화되어 있어" in result.response.speech["plain"]["speech"]
