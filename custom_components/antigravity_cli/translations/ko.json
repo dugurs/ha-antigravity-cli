@@ -7,7 +7,8 @@
         "data": {
           "host": "호스트 (Host)",
           "port": "포트 (Port)",
-          "api_key": "API 키 (선택사항)"
+          "api_key": "API 키 (선택사항)",
+          "gemini_api_key": "Gemini API 키 (선택사항, 고속 자연어 음성 처리용)"
         }
       }
     },
@@ -28,7 +29,9 @@
           "processing_mode": "대화 처리 동작 모드",
           "port": "포트 (Port)",
           "poll_interval": "데이터 폴링 주기(초)",
-          "api_key": "API 키 (선택사항)"
+          "api_key": "API 키 (선택사항)",
+          "gemini_api_key": "Gemini API 키 (선택사항, 고속 자연어 음성 처리용)",
+          "gemini_model": "Gemini 모델"
         }
       }
     }

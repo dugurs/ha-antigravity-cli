@@ -62,3 +62,48 @@ async def test_form(hass: HomeAssistant) -> None:
     assert result2["data"][CONF_HOST] == "127.0.0.1"
     assert result2["data"][CONF_PORT] == 8000
     assert len(mock_setup_entry.mock_calls) == 1
+
+
+async def test_options_flow(hass: HomeAssistant) -> None:
+    """Test options flow handles gemini settings."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.antigravity_cli.const import (
+        CONF_API_KEY,
+        CONF_GEMINI_API_KEY,
+        CONF_GEMINI_MODEL,
+        CONF_POLL_INTERVAL,
+        CONF_PROCESSING_MODE,
+        MODE_HYBRID,
+    )
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Antigravity CLI (127.0.0.1:8000)",
+        data={
+            CONF_HOST: "127.0.0.1",
+            CONF_PORT: 8000,
+        },
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["step_id"] == "init"
+
+    result2 = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={
+            CONF_PROCESSING_MODE: MODE_HYBRID,
+            CONF_PORT: 8000,
+            CONF_POLL_INTERVAL: 30,
+            CONF_API_KEY: "",
+            CONF_GEMINI_API_KEY: "AIzaSyTest123",
+            CONF_GEMINI_MODEL: "gemini-2.5-flash",
+        },
+    )
+    await hass.async_block_till_done()
+
+    assert result2["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
+    assert result2["data"][CONF_GEMINI_API_KEY] == "AIzaSyTest123"
+    assert result2["data"][CONF_GEMINI_MODEL] == "gemini-2.5-flash"

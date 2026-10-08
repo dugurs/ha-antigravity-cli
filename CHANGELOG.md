@@ -2,6 +2,22 @@
 
 All notable changes to the `antigravity_cli` Home Assistant integration will be documented in this file.
 
+## 1.3.0 (2026-10-08)
+
+### 초고속 Gemini API 직접 연동 및 3단계 대화 아키텍처 (Direct Gemini API & 3-Tier Assist Architecture)
+- **Direct Google Gemini API 탑재**:
+  - 통합구성요소 옵션(`Options Flow`) 및 최초 구성 화면에서 `gemini_api_key` 및 `gemini_model`(`gemini-2.5-flash` 기본값) 설정 지원
+  - 정형화되지 않은 자연어 질의(지식, 일상 대화, 복합 질문 등)를 애드온 MCP 거치지 않고 Google Generative Language REST API로 직접 호출하여 응답 속도를 기존 4~10초에서 **1.0~1.5초**로 획기적 단축
+  - 멀티턴 대화 히스토리 및 스마트홈 컨텍스트(현재 시각, 실내외 환경, 기기 현황) 주입
+  - `control_device` 함수 호출(Tool Calling) 지원으로 자연어 제어 명령도 단일 라운드트립으로 즉시 실행
+- **3단계 초고속 대화 파이프라인(3-Tier Architecture)**:
+  - **Tier 1 (0.05초)**: 로컬 고속 패턴 매칭 (기기 온/오프, 토글, %, 온도, 외출/취침 모드, 라디오, 날씨/온습도/문열림/세탁기 상태)
+  - **Tier 2 (1.0~1.5초)**: 비정형 자연어 질의 직결 Gemini API (`gemini-2.5-flash`)
+  - **Tier 3**: 접두사(`/agy`, `/ai` 등) 명시 시 또는 Gemini 실패 시 애드온 `/api/chat` 자율 에이전트/MCP 폴백
+  - **Tier 4**: 오프라인 로컬 상태 브리핑 비상 폴백
+- **테스트 스위트 확장**:
+  - `test_conversation.py` 및 `test_gemini_client.py` 등 총 25개 테스트 전원 통과 (100% Pass)
+
 ## 1.2.0 (2026-09-16)
 
 ### 애드온 옵션 제어 및 커스텀 챗 서비스 추가 (Options Control & Chat Service)

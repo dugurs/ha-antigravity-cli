@@ -8,7 +8,7 @@ import logging
 import os
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Literal
 
 import aiohttp
@@ -24,15 +24,22 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import intent
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_GEMINI_API_KEY,
+    CONF_GEMINI_MODEL,
     CONF_PROCESSING_MODE,
+    DEFAULT_GEMINI_MODEL,
     DEFAULT_PROCESSING_MODE,
     DOMAIN,
+    MODE_FAST_LOCAL,
+    MODE_LLM_MCP,
     NAME,
 )
 from .coordinator import AntigravityDataUpdateCoordinator
 from .entity import AntigravityEntity
+from .gemini_client import TOOL_CONTROL_DEVICE, async_call_gemini_api
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -266,6 +273,7 @@ class ConversationSession:
     last_entity_id: str | None = None
     last_room: str | None = None
     pending_confirm: dict | None = None
+    history: list[dict[str, Any]] = field(default_factory=list)
     updated_at: float = 0.0
 
 
@@ -544,6 +552,25 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
         return self._entry.options.get(
             CONF_PROCESSING_MODE,
             self._entry.data.get(CONF_PROCESSING_MODE, DEFAULT_PROCESSING_MODE),
+        )
+
+    @property
+    def gemini_api_key(self) -> str:
+        """Return configured Gemini API key."""
+        return (
+            self._entry.options.get(
+                CONF_GEMINI_API_KEY,
+                self._entry.data.get(CONF_GEMINI_API_KEY, ""),
+            )
+            or ""
+        ).strip()
+
+    @property
+    def gemini_model(self) -> str:
+        """Return configured Gemini model."""
+        return self._entry.options.get(
+            CONF_GEMINI_MODEL,
+            self._entry.data.get(CONF_GEMINI_MODEL, DEFAULT_GEMINI_MODEL),
         )
 
     def _get_or_create_session(self, conversation_id: str | None) -> ConversationSession:
@@ -1456,27 +1483,104 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
 
         return None
 
-    async def async_process(self, user_input: ConversationInput) -> ConversationResult:
-        """Try the addon's own /api/chat first -- its fast-dispatch engine
-        covers room-scoped control, confirmation gates, and every info
-        query with more rigor than this integration can match locally.
-        Local processing (_handle_local_fallback / _handle_info_query)
-        only ever runs as a second line of defense, when the addon is
-        completely unreachable this turn.
-        """
-        intent_response = intent.IntentResponse(language=user_input.language)
+    def _build_gemini_system_instruction(self) -> str:
+        """Construct system prompt for Gemini direct voice assistant."""
+        now_str = dt_util.now().strftime("%Y년 %m월 %d일 %A %H:%M")
+        home_summary = self._generate_home_summary()
+        return (
+            f"당신은 스마트홈 Home Assistant 음성 어시스턴트입니다.\n"
+            f"현재 시각: {now_str}\n"
+            f"스마트홈 상태 요약:\n{home_summary}\n\n"
+            f"지침:\n"
+            f"1. 사용자에게 친절하고 정중하며 자연스러운 한국어로 답변하세요.\n"
+            f"2. 음성 안내(TTS)용이므로 핵심만 간결하게 1~2문장으로 답변하세요. 특수문자나 마크다운 서식을 남발하지 마세요.\n"
+            f"3. 사용자가 조명, 스위치, 에어컨, 커튼 등의 기기 제어를 요청했을 때만 'control_device' 도구를 호출하세요.\n"
+            f"4. 일반 질문, 날씨 질문, 지식 대화일 때는 도구를 호출하지 말고 말로 간결히 답변하세요."
+        )
 
-        raw_text = user_input.text.strip()
-        force_llm = False
-        target_prompt = raw_text
+    async def _handle_gemini_direct(self, prompt: str, session: ConversationSession) -> str | None:
+        """Execute direct Gemini API processing with fallback."""
+        api_key = self.gemini_api_key
+        if not api_key:
+            return None
 
-        # Check explicit LLM triggers (/llm, !llm, ai, agy)
-        for prefix in LLM_PREFIXES:
-            if raw_text.lower().startswith(prefix.lower()):
-                force_llm = True
-                target_prompt = raw_text[len(prefix) :].strip()
-                break
+        http_session = async_get_clientsession(self.hass)
+        system_inst = self._build_gemini_system_instruction()
 
+        # Multi-turn history (keep last 6 turns to avoid context bloat)
+        history_slice = session.history[-6:] if session.history else None
+
+        text_reply, func_calls, err = await async_call_gemini_api(
+            session=http_session,
+            api_key=api_key,
+            model=self.gemini_model,
+            prompt=prompt,
+            system_instruction=system_inst,
+            history=history_slice,
+            tools=TOOL_CONTROL_DEVICE,
+            timeout_sec=10.0,
+        )
+
+        if err:
+            _LOGGER.warning("Gemini direct API call failed (%s), will fallback to addon", err)
+            return None
+
+        # If model requested device control
+        if func_calls:
+            for fc in func_calls:
+                if fc.get("name") == "control_device":
+                    args = fc.get("args", {})
+                    domain = args.get("domain", "homeassistant")
+                    service = args.get("service", "turn_on")
+                    entity_id = args.get("entity_id", "")
+                    extra_data = args.get("extra_data") or {}
+                    speech = args.get("speech")
+
+                    # Check entity validity or resolve target
+                    target_eids = [e.strip() for e in entity_id.split(",") if e.strip()]
+                    valid_eids = []
+                    for eid in target_eids:
+                        if self.hass.states.get(eid):
+                            valid_eids.append(eid)
+                        else:
+                            targets, _ = self._resolve_target(eid, domain, service)
+                            if targets:
+                                valid_eids.extend([t.entity_id for t in targets])
+
+                    if not valid_eids and target_eids != ["all"]:
+                        targets, _ = self._resolve_target(entity_id, domain, service)
+                        if targets:
+                            valid_eids = [t.entity_id for t in targets]
+
+                    exec_eids = valid_eids if valid_eids else (target_eids or entity_id)
+                    service_data = {"entity_id": exec_eids}
+                    if isinstance(extra_data, dict):
+                        service_data.update(extra_data)
+
+                    try:
+                        await self.hass.services.async_call(
+                            domain, service, service_data, blocking=True
+                        )
+                        final_speech = speech or f"{entity_id} 제어를 완료했습니다."
+                    except Exception as ex:
+                        _LOGGER.error("Failed to execute tool call %s.%s: %s", domain, service, ex)
+                        final_speech = f"{entity_id} 제어 중 오류가 발생했습니다."
+
+                    session.history.append({"role": "user", "parts": [{"text": prompt}]})
+                    session.history.append({"role": "model", "parts": [{"text": final_speech}]})
+                    return final_speech
+
+        if text_reply:
+            session.history.append({"role": "user", "parts": [{"text": prompt}]})
+            session.history.append({"role": "model", "parts": [{"text": text_reply}]})
+            return text_reply
+
+        return None
+
+    async def _call_addon_chat(
+        self, prompt: str, conversation_id: str | None, is_direct_llm: bool
+    ) -> tuple[str | None, str | None, str | None]:
+        """Call addon /api/chat endpoint."""
         http_session = async_get_clientsession(self.hass)
         host_candidates = [self.coordinator.host]
         for fallback in ["local-antigravity-cli", "127.0.0.1", "localhost"]:
@@ -1488,9 +1592,9 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
             headers["Authorization"] = f"Bearer {self.coordinator.api_key}"
 
         payload = {
-            "prompt": target_prompt,
-            "conversation_id": user_input.conversation_id,
-            "is_direct_llm": force_llm,
+            "prompt": prompt,
+            "conversation_id": conversation_id,
+            "is_direct_llm": is_direct_llm,
         }
 
         last_error = None
@@ -1502,39 +1606,142 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
                         if response.status == 200:
                             raw_body = await response.text()
                             response_text, conv_id = _parse_sse_chat_response(raw_body)
-                            intent_response.async_set_speech(
-                                response_text or "답변을 생성할 수 없습니다."
-                            )
-                            return ConversationResult(
-                                response=intent_response,
-                                conversation_id=conv_id or user_input.conversation_id,
-                            )
+                            return response_text, conv_id, None
                         elif response.status == 401:
-                            intent_response.async_set_error(
-                                intent.IntentResponseErrorCode.UNKNOWN,
-                                "Antigravity CLI 인증에 실패했습니다. API 키를 확인해주세요.",
-                            )
-                            return ConversationResult(
-                                response=intent_response,
-                                conversation_id=user_input.conversation_id,
-                            )
+                            return None, None, "auth_error"
             except (TimeoutError, aiohttp.ClientError) as err:
-                last_error = err
+                last_error = str(err)
                 continue
+        return None, None, last_error or "unreachable"
 
-        # Addon unreachable on every host this turn -- second line of defense.
-        _LOGGER.warning(
-            "Antigravity CLI addon unreachable (%s) -- falling back to local processing for: %s",
-            last_error,
-            target_prompt,
-        )
+    async def async_process(self, user_input: ConversationInput) -> ConversationResult:
+        """Process conversational input with 3-tier ultra-fast architecture:
+        Tier 1: 0.05s local pattern & device control matching.
+        Tier 2: 1.0~1.5s direct Google Gemini API for un-patterned natural language queries.
+        Tier 3: Antigravity CLI addon (/api/chat) fallback or autonomous agent invocation.
+        """
+        intent_response = intent.IntentResponse(language=user_input.language)
+
+        raw_text = user_input.text.strip()
+        force_llm = False
+        target_prompt = raw_text
+
+        # Check explicit LLM triggers (/llm, !llm, /ai, /agy, ai , agy , 질문:, 질문 , 물어봐 )
+        for prefix in LLM_PREFIXES:
+            if raw_text.lower().startswith(prefix.lower()):
+                force_llm = True
+                target_prompt = raw_text[len(prefix) :].strip()
+                break
+
+        mode = self.processing_mode
         session = self._get_or_create_session(user_input.conversation_id)
+
+        # 1. Pure AI / Autonomous CLI Mode or explicit CLI trigger
+        if force_llm or mode == MODE_LLM_MCP:
+            addon_text, conv_id, err = await self._call_addon_chat(
+                target_prompt, user_input.conversation_id, is_direct_llm=True
+            )
+            if addon_text:
+                intent_response.async_set_speech(addon_text)
+                return ConversationResult(
+                    response=intent_response,
+                    conversation_id=conv_id or user_input.conversation_id,
+                )
+            if err == "auth_error":
+                intent_response.async_set_error(
+                    intent.IntentResponseErrorCode.UNKNOWN,
+                    "Antigravity CLI 인증에 실패했습니다. API 키를 확인해주세요.",
+                )
+                return ConversationResult(
+                    response=intent_response,
+                    conversation_id=user_input.conversation_id,
+                )
+            # Addon unreachable: try direct Gemini if key available
+            if self.gemini_api_key:
+                gemini_text = await self._handle_gemini_direct(target_prompt, session)
+                if gemini_text:
+                    intent_response.async_set_speech(gemini_text)
+                    return ConversationResult(
+                        response=intent_response,
+                        conversation_id=user_input.conversation_id,
+                    )
+            # Final offline fallback
+            local_speech = await self._handle_local_fallback(target_prompt, session)
+            if not local_speech:
+                local_speech = (
+                    self._handle_info_query(target_prompt, session) or self._generate_home_summary()
+                )
+            intent_response.async_set_speech(f"⚠️ (애드온 응답 없음, 로컬로 처리) {local_speech}")
+            return ConversationResult(
+                response=intent_response,
+                conversation_id=user_input.conversation_id,
+            )
+
+        # 2. Fast Local Mode (Local matching only, no cloud/addon LLM)
+        if mode == MODE_FAST_LOCAL:
+            local_speech = await self._handle_local_fallback(target_prompt, session)
+            if not local_speech:
+                local_speech = self._handle_info_query(target_prompt, session)
+            if not local_speech:
+                local_speech = "로컬 고속 모드에서는 해당 명령을 처리할 수 없습니다."
+            intent_response.async_set_speech(local_speech)
+            return ConversationResult(
+                response=intent_response,
+                conversation_id=user_input.conversation_id,
+            )
+
+        # 3. Hybrid Mode (Default):
+        # Tier 1: Local Fast Matching (~0.05s)
         local_speech = await self._handle_local_fallback(target_prompt, session)
         if not local_speech:
-            local_speech = (
-                self._handle_info_query(target_prompt, session) or self._generate_home_summary()
+            local_speech = self._handle_info_query(target_prompt, session)
+        if local_speech:
+            intent_response.async_set_speech(local_speech)
+            return ConversationResult(
+                response=intent_response,
+                conversation_id=user_input.conversation_id,
             )
-        intent_response.async_set_speech(f"⚠️ (애드온 응답 없음, 로컬로 처리) {local_speech}")
+
+        # Tier 2: Direct Gemini API (~1.0-1.5s) for un-patterned natural language queries
+        if self.gemini_api_key:
+            gemini_speech = await self._handle_gemini_direct(target_prompt, session)
+            if gemini_speech:
+                intent_response.async_set_speech(gemini_speech)
+                return ConversationResult(
+                    response=intent_response,
+                    conversation_id=user_input.conversation_id,
+                )
+            _LOGGER.info(
+                "Gemini direct processing failed or returned empty; falling back to addon /api/chat"
+            )
+
+        # Tier 3: Addon /api/chat fallback
+        addon_text, conv_id, err = await self._call_addon_chat(
+            target_prompt, user_input.conversation_id, is_direct_llm=False
+        )
+        if addon_text:
+            intent_response.async_set_speech(addon_text)
+            return ConversationResult(
+                response=intent_response,
+                conversation_id=conv_id or user_input.conversation_id,
+            )
+        if err == "auth_error":
+            intent_response.async_set_error(
+                intent.IntentResponseErrorCode.UNKNOWN,
+                "Antigravity CLI 인증에 실패했습니다. API 키를 확인해주세요.",
+            )
+            return ConversationResult(
+                response=intent_response,
+                conversation_id=user_input.conversation_id,
+            )
+
+        # Tier 4: Addon also unreachable offline fallback
+        _LOGGER.warning(
+            "Antigravity CLI addon unreachable -- falling back to offline summary for: %s",
+            target_prompt,
+        )
+        offline_speech = self._generate_home_summary()
+        intent_response.async_set_speech(f"⚠️ (응답 생성 실패, 현재 집안 상태) {offline_speech}")
         return ConversationResult(
             response=intent_response,
             conversation_id=user_input.conversation_id,

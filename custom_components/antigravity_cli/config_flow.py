@@ -15,15 +15,19 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
     CONF_API_KEY,
+    CONF_GEMINI_API_KEY,
+    CONF_GEMINI_MODEL,
     CONF_HOST,
     CONF_POLL_INTERVAL,
     CONF_PORT,
     CONF_PROCESSING_MODE,
+    DEFAULT_GEMINI_MODEL,
     DEFAULT_HOST,
     DEFAULT_POLL_INTERVAL,
     DEFAULT_PORT,
     DEFAULT_PROCESSING_MODE,
     DOMAIN,
+    GEMINI_MODELS,
     MODE_FAST_LOCAL,
     MODE_HYBRID,
     MODE_LLM_MCP,
@@ -37,6 +41,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_HOST, default=DEFAULT_HOST): str,
         vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
         vol.Optional(CONF_API_KEY, default=""): str,
+        vol.Optional(CONF_GEMINI_API_KEY, default=""): str,
         vol.Optional(CONF_POLL_INTERVAL, default=DEFAULT_POLL_INTERVAL): int,
     }
 )
@@ -163,6 +168,31 @@ class AntigravityOptionsFlowHandler(config_entries.OptionsFlow):
                             CONF_API_KEY, self._config_entry.data.get(CONF_API_KEY, "")
                         ),
                     ): str,
+                    vol.Optional(
+                        CONF_GEMINI_API_KEY,
+                        default=self._config_entry.options.get(
+                            CONF_GEMINI_API_KEY,
+                            self._config_entry.data.get(CONF_GEMINI_API_KEY, ""),
+                        ),
+                    ): str,
+                    vol.Optional(
+                        CONF_GEMINI_MODEL,
+                        default=self._config_entry.options.get(
+                            CONF_GEMINI_MODEL,
+                            self._config_entry.data.get(CONF_GEMINI_MODEL, DEFAULT_GEMINI_MODEL),
+                        ),
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                selector.SelectOptionDict(
+                                    value=model,
+                                    label=model,
+                                )
+                                for model in GEMINI_MODELS
+                            ],
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
                 }
             ),
         )

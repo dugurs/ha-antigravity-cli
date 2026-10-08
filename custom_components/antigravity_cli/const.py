@@ -11,6 +11,8 @@ CONF_PORT: Final = "port"
 CONF_API_KEY: Final = "api_key"
 CONF_POLL_INTERVAL: Final = "poll_interval"
 CONF_PROCESSING_MODE: Final = "processing_mode"
+CONF_GEMINI_API_KEY: Final = "gemini_api_key"
+CONF_GEMINI_MODEL: Final = "gemini_model"
 
 # Processing Modes
 MODE_HYBRID: Final = "hybrid"
@@ -28,6 +30,15 @@ DEFAULT_HOST: Final = "localhost"
 DEFAULT_PORT: Final = 8000
 DEFAULT_POLL_INTERVAL: Final = 30  # seconds
 DEFAULT_PROCESSING_MODE: Final = MODE_HYBRID
+DEFAULT_GEMINI_MODEL: Final = "gemini-2.5-flash"
+
+GEMINI_MODELS: Final = [
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-pro",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+]
 
 # Platforms
 PLATFORMS: Final = [
