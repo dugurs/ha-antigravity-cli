@@ -10,15 +10,16 @@ All notable changes to the `antigravity_cli` Home Assistant integration will be 
   - 정형화되지 않은 자연어 질의(지식, 일상 대화, 복합 질문 등)를 애드온 MCP 거치지 않고 Google Generative Language REST API로 직접 호출하여 응답 속도를 기존 4~10초에서 **1.0~1.5초**로 획기적 단축
   - 멀티턴 대화 히스토리 및 스마트홈 컨텍스트(현재 시각, 실내외 환경, 기기 현황) 주입
   - `control_device` 함수 호출(Tool Calling) 지원으로 자연어 제어 명령도 단일 라운드트립으로 즉시 실행
-- **3단계 초고속 대화 파이프라인(3-Tier Architecture)**:
+- **4단계 대화 파이프라인 (4-Tier Architecture)**:
   - **Tier 1 (0.05초)**: 로컬 고속 패턴 매칭 (기기 온/오프, 토글, %, 온도, 외출/취침 모드, 라디오, 날씨/온습도/문열림/세탁기 상태)
   - **Tier 2 (1.0~1.5초)**: 비정형 자연어 질의 직결 Gemini API (`gemini-2.5-flash`)
-  - **Tier 3/4**: 애드온 `/api/chat` 자율 에이전트/MCP 폴백
+  - **Tier 3 (4~10초)**: 접두사(`/agy`, `/ai`) 명시 시 또는 Gemini 미설정 시 애드온 `/api/chat` 자율 에이전트/MCP(88개 도구) 폴백
+  - **Tier 4 (오프라인 폴백)**: 외부 API 및 애드온 서버 불가 시, 엉뚱한 집 상태 요약 대신 정확한 원인 및 조치 안내 메시지 즉시 반환
 - **애드온 MCP 사용 및 폴백 온/오프 옵션 (`enable_addon_mcp`) 추가**:
   - 통합구성요소 옵션에서 애드온 MCP(ha-mcp) 사용 여부를 자유롭게 선택 가능
-  - MCP 사용을 끄면 Tier 3/4 조건(자연어 질의 시 Gemini 미설정/실패 또는 `/agy` 등 명시 시)에서 느린 MCP 대기 없이 즉시 사용 불가 안내 메시지를 사용자에게 음성/텍스트로 반환
+  - MCP 사용을 끄면 Tier 3 조건(자연어 질의 시 Gemini 미설정/실패 또는 `/agy` 등 명시 시)에서 느린 MCP 대기 없이 즉시 사용 불가 안내 메시지를 사용자에게 음성/텍스트로 반환
 - **테스트 스위트 확장**:
-  - `test_conversation.py`, `test_config_flow.py`, `test_gemini_client.py` 등 총 27개 테스트 전원 통과 (100% Pass)
+  - `test_conversation.py`, `test_config_flow.py`, `test_gemini_client.py` 등 총 28개 테스트 전원 통과 (100% Pass)
 
 ## 1.2.0 (2026-09-16)
 

@@ -1688,10 +1688,15 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
             # Final offline fallback
             local_speech = await self._handle_local_fallback(target_prompt, session)
             if not local_speech:
-                local_speech = (
-                    self._handle_info_query(target_prompt, session) or self._generate_home_summary()
+                local_speech = self._handle_info_query(target_prompt, session)
+            if local_speech:
+                intent_response.async_set_speech(
+                    f"⚠️ (애드온 응답 없음, 로컬로 처리) {local_speech}"
                 )
-            intent_response.async_set_speech(f"⚠️ (애드온 응답 없음, 로컬로 처리) {local_speech}")
+            else:
+                intent_response.async_set_speech(
+                    "해당 명령을 처리할 수 없습니다. (Antigravity CLI 애드온 연결 상태를 확인해주세요.)"
+                )
             return ConversationResult(
                 response=intent_response,
                 conversation_id=user_input.conversation_id,
@@ -1766,13 +1771,14 @@ class AntigravityConversationEntity(AntigravityEntity, ConversationEntity):
                 conversation_id=user_input.conversation_id,
             )
 
-        # Tier 4: Addon also unreachable offline fallback
+        # Tier 4: Addon unreachable offline fallback
         _LOGGER.warning(
-            "Antigravity CLI addon unreachable -- falling back to offline summary for: %s",
+            "Antigravity CLI addon unreachable -- command cannot be processed: %s",
             target_prompt,
         )
-        offline_speech = self._generate_home_summary()
-        intent_response.async_set_speech(f"⚠️ (응답 생성 실패, 현재 집안 상태) {offline_speech}")
+        intent_response.async_set_speech(
+            "해당 명령을 이해하거나 처리할 수 없습니다. (Gemini API 키를 등록하거나 Antigravity CLI 애드온 연결 상태를 확인해주세요.)"
+        )
         return ConversationResult(
             response=intent_response,
             conversation_id=user_input.conversation_id,

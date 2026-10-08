@@ -472,3 +472,49 @@ async def test_process_addon_mcp_disabled_explicit_cli(hass: HomeAssistant) -> N
             assert not mock_addon.called
 
     assert "애드온 MCP 사용이 비활성화되어 있어" in result.response.speech["plain"]["speech"]
+
+
+async def test_process_tier4_offline_fallback(hass: HomeAssistant) -> None:
+    """Test Tier 4 offline fallback guides user when both Gemini and addon fail."""
+    from homeassistant.components.conversation import ConversationInput
+    from homeassistant.core import Context
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Antigravity CLI (127.0.0.1:8000)",
+        data={CONF_HOST: "127.0.0.1", CONF_PORT: 8000},
+    )
+    entry.add_to_hass(hass)
+
+    with (
+        patch(
+            "custom_components.antigravity_cli.coordinator.async_get_clientsession",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "custom_components.antigravity_cli.conversation.async_get_clientsession",
+            return_value=MagicMock(),
+        ),
+    ):
+        coordinator = AntigravityDataUpdateCoordinator(hass, entry)
+        entity = AntigravityConversationEntity(coordinator, entry)
+        entity.hass = hass
+
+        user_input = ConversationInput(
+            text="달의 지름이 얼마야?",
+            context=Context(),
+            conversation_id="conv_tier4_offline",
+            device_id=None,
+            language="ko",
+        )
+
+        with patch.object(
+            entity,
+            "_call_addon_chat",
+            return_value=(None, None, "connection_error"),
+        ):
+            result = await entity.async_process(user_input)
+
+    speech = result.response.speech["plain"]["speech"]
+    assert "해당 명령을 이해하거나 처리할 수 없습니다" in speech
+    assert "Gemini API 키를 등록하거나 Antigravity CLI 애드온 연결 상태를 확인" in speech
