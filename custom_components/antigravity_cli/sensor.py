@@ -67,34 +67,6 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         icon="mdi:calendar-clock",
         state_class=SensorStateClass.MEASUREMENT,
     ),
-    SensorEntityDescription(
-        key="gemini_quota",
-        translation_key="gemini_quota",
-        icon="mdi:google",
-        native_unit_of_measurement=PERCENTAGE,
-        state_class=SensorStateClass.MEASUREMENT,
-    ),
-    SensorEntityDescription(
-        key="gemini_5h_quota",
-        translation_key="gemini_5h_quota",
-        icon="mdi:google",
-        native_unit_of_measurement=PERCENTAGE,
-        state_class=SensorStateClass.MEASUREMENT,
-    ),
-    SensorEntityDescription(
-        key="claude_quota",
-        translation_key="claude_quota",
-        icon="mdi:creation",
-        native_unit_of_measurement=PERCENTAGE,
-        state_class=SensorStateClass.MEASUREMENT,
-    ),
-    SensorEntityDescription(
-        key="claude_5h_quota",
-        translation_key="claude_5h_quota",
-        icon="mdi:creation",
-        native_unit_of_measurement=PERCENTAGE,
-        state_class=SensorStateClass.MEASUREMENT,
-    ),
 )
 
 
@@ -137,18 +109,6 @@ class AntigravitySensor(AntigravityEntity, SensorEntity):
                 return "offline"
             activity = self.coordinator.data.get("activity") or {}
             return activity.get("state", "idle")
-        if self.entity_description.key == "gemini_quota":
-            usage = self.coordinator.data.get("usage") or {}
-            return usage.get("gemini_weekly_remaining")
-        if self.entity_description.key == "gemini_5h_quota":
-            usage = self.coordinator.data.get("usage") or {}
-            return usage.get("gemini_5h_remaining")
-        if self.entity_description.key == "claude_quota":
-            usage = self.coordinator.data.get("usage") or {}
-            return usage.get("claude_weekly_remaining")
-        if self.entity_description.key == "claude_5h_quota":
-            usage = self.coordinator.data.get("usage") or {}
-            return usage.get("claude_5h_remaining")
         return self.coordinator.data.get(self.entity_description.key)
 
     @property

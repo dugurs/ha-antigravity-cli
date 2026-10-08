@@ -71,18 +71,6 @@
       },
       "scheduled_count": {
         "name": "Scheduled Executions"
-      },
-      "gemini_quota": {
-        "name": "Gemini Weekly Quota Remaining"
-      },
-      "gemini_5h_quota": {
-        "name": "Gemini 5-Hour Quota Remaining"
-      },
-      "claude_quota": {
-        "name": "Claude Weekly Quota Remaining"
-      },
-      "claude_5h_quota": {
-        "name": "Claude 5-Hour Quota Remaining"
       }
     },
     "binary_sensor": {
